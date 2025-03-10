@@ -1,0 +1,59 @@
+let countdown;
+let elapsed = 0;
+let running = false;
+let paused = false;
+let isStopwatch = false;
+
+function startTimer() {
+    if (running) return; // Prevent multiple starts
+
+    let minutes = document.getElementById("minutes").value;
+    let totalSeconds = minutes * 60;
+    
+    if (totalSeconds <= 0) return;
+
+    running = true;
+    paused = false;
+    isStopwatch = false;
+    elapsed = 0;
+
+    function updateDisplay(seconds) {
+        let hrs = Math.floor(seconds / 3600);
+        let mins = Math.floor((seconds % 3600) / 60);
+        let secs = seconds % 60;
+        document.getElementById("display").innerText = 
+            `${hrs.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    updateDisplay(totalSeconds);
+
+    countdown = setInterval(() => {
+        if (!paused) {
+            totalSeconds--;
+            if (totalSeconds < 0) {
+                isStopwatch = true;
+                elapsed = 0;
+            } else {
+                updateDisplay(totalSeconds);
+            }
+        }
+
+        if (isStopwatch) {
+            elapsed++;
+            updateDisplay(elapsed);
+        }
+    }, 1000);
+}
+
+function pauseResume() {
+    if (!running) return;
+    paused = !paused;
+}
+
+function resetTimer() {
+    clearInterval(countdown);
+    document.getElementById("display").innerText = "00:00:00";
+    running = false;
+    paused = false;
+    isStopwatch = false;
+}
