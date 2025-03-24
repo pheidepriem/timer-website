@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Countdown & Stopwatch Timer</title>
+  <style>
+    body {
+      background-color: black;
+      color: white;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    #timeDisplay {
+      font-size: 4em;
+      margin: 20px;
+    }
+    input, button {
+      font-size: 1em;
+      margin: 5px;
+      padding: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <input type="number" id="minutesInput" placeholder="Enter minutes" />
+    <button onclick="startTimer()">Start</button>
+    <button onclick="pauseResumeTimer()">Pause/Resume</button>
+    <button onclick="resetTimer()">Reset</button>
+  </div>
+  <div id="timeDisplay">00:00:00</div>
+
+  <script>
+    let countdownInterval;
+    let stopwatchInterval;
+    let totalSeconds = 0;
+    let elapsedSeconds = 0;
+    let paused = false;
+    let isCountingDown = false;
+
+    function updateDisplay(seconds) {
+      let hrs = Math.floor(seconds / 3600);
+      let mins = Math.floor((seconds % 3600) / 60);
+      let secs = seconds % 60;
+      document.getElementById("timeDisplay").textContent =
+        String(hrs).padStart(2, '0') + ":" +
+        String(mins).padStart(2, '0') + ":" +
+        String(secs).padStart(2, '0');
+    }
+
+    function startTimer() {
+      if (countdownInterval || stopwatchInterval) return; // prevent multiple starts
+
+      const minutes = parseInt(document.getElementById("minutesInput").value);
+      if (isNaN(minutes) || minutes <= 0) return;
+
+      totalSeconds = minutes * 60;
+      isCountingDown = true;
+      paused = false;
+      updateDisplay(totalSeconds);
+
+      countdownInterval = setInterval(() => {
+        if (!paused) {
+          totalSeconds--;
+          updateDisplay(totalSeconds);
+          if (totalSeconds <= 0) {
+            clearInterval(countdownInterval);
+            countdownInterval = null;
+            startStopwatch();
+          }
+        }
+      }, 1000);
+    }
+
+    function startStopwatch() {
+      isCountingDown = false;
+      elapsedSeconds = 0;
+      stopwatchInterval = setInterval(() => {
+        if (!paused) {
+          elapsedSeconds++;
+          updateDisplay(elapsedSeconds);
+        }
+      }, 1000);
+    }
+
+    function pauseResumeTimer() {
+      if (!countdownInterval && !stopwatchInterval) return;
+      paused = !paused;
+    }
+
+    function resetTimer() {
+      clearInterval(countdownInterval);
+      clearInterval(stopwatchInterval);
+      countdownInterval = null;
+      stopwatchInterval = null;
+      paused = false;
+      isCountingDown = false;
+      totalSeconds = 0;
+      elapsedSeconds = 0;
+      updateDisplay(0);
+    }
+  </script>
+</body>
+</html>
