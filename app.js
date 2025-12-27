@@ -1,3 +1,4 @@
+alert("app.js is running");
 const STORAGE_KEY = "kitchen-timer-state";
 
 const timeDisplay = document.getElementById("timeDisplay");
