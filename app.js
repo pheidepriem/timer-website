@@ -35,13 +35,11 @@ const saveState = () => {
 
 const loadState = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
-  if (!saved) {
-    return;
-  }
+  if (!saved) return;
   try {
     const parsed = JSON.parse(saved);
     Object.assign(state, parsed);
-  } catch (error) {
+  } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
 };
@@ -57,17 +55,13 @@ const updateButtons = () => {
 };
 
 const calculateRemainingSeconds = () => {
-  if (!state.countdownEndTimestamp) {
-    return state.remainingSeconds;
-  }
+  if (!state.countdownEndTimestamp) return state.remainingSeconds;
   const diff = state.countdownEndTimestamp - Date.now();
   return Math.max(0, Math.floor((diff + 999) / 1000));
 };
 
 const calculateStopwatchElapsed = () => {
-  if (!state.stopwatchStartTimestamp) {
-    return state.stopwatchElapsedSeconds;
-  }
+  if (!state.stopwatchStartTimestamp) return state.stopwatchElapsedSeconds;
   const diff = Date.now() - state.stopwatchStartTimestamp;
   return Math.max(0, Math.floor(diff / 1000));
 };
@@ -82,19 +76,19 @@ const warmAudio = () => {
 };
 
 const playAlertSound = () => {
-  if (!audioContext) {
-    warmAudio();
-  }
-  if (!audioContext) {
-    return;
-  }
+  if (!audioContext) warmAudio();
+  if (!audioContext) return;
+
   const oscillator = audioContext.createOscillator();
   const gainNode = audioContext.createGain();
+
   oscillator.type = "sine";
   oscillator.frequency.setValueAtTime(880, audioContext.currentTime);
+
   gainNode.gain.setValueAtTime(0.001, audioContext.currentTime);
   gainNode.gain.exponentialRampToValueAtTime(0.4, audioContext.currentTime + 0.02);
   gainNode.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + 1.2);
+
   oscillator.connect(gainNode).connect(audioContext.destination);
   oscillator.start();
   oscillator.stop(audioContext.currentTime + 1.2);
@@ -122,11 +116,13 @@ const transitionToStopwatch = () => {
   triggerAlert();
   const now = Date.now();
   const elapsed = Math.max(0, Math.floor((now - state.countdownEndTimestamp) / 1000));
+
   state.mode = "stopwatch";
   state.status = "running";
   state.stopwatchElapsedSeconds = elapsed;
   state.stopwatchStartTimestamp = now - elapsed * 1000;
   state.countdownEndTimestamp = null;
+
   updateDisplay(state.stopwatchElapsedSeconds);
   updateButtons();
   saveState();
@@ -137,8 +133,10 @@ const startCountdown = (minutes) => {
   state.status = "running";
   state.remainingSeconds = minutes * 60;
   state.countdownEndTimestamp = Date.now() + state.remainingSeconds * 1000;
+
   state.stopwatchElapsedSeconds = 0;
   state.stopwatchStartTimestamp = null;
+
   updateDisplay(state.remainingSeconds);
   updateButtons();
   saveState();
@@ -154,24 +152,22 @@ const startStopwatch = () => {
 
 const handleStart = () => {
   warmAudio();
-  if (state.status === "running") {
-    return;
-  }
+  if (state.status === "running") return;
+
   if (state.mode === "stopwatch") {
     startStopwatch();
     return;
   }
+
   const minutes = Number.parseInt(minutesInput.value, 10);
-  if (Number.isNaN(minutes) || minutes <= 0) {
-    return;
-  }
+  if (Number.isNaN(minutes) || minutes <= 0) return;
+
   startCountdown(minutes);
 };
 
 const handlePauseResume = () => {
-  if (state.status === "stopped") {
-    return;
-  }
+  if (state.status === "stopped") return;
+
   if (state.status === "running") {
     if (state.mode === "countdown") {
       state.remainingSeconds = calculateRemainingSeconds();
@@ -189,6 +185,7 @@ const handlePauseResume = () => {
       state.stopwatchStartTimestamp = Date.now() - state.stopwatchElapsedSeconds * 1000;
     }
   }
+
   updateButtons();
   saveState();
 };
@@ -200,19 +197,20 @@ const handleReset = () => {
   state.stopwatchElapsedSeconds = 0;
   state.countdownEndTimestamp = null;
   state.stopwatchStartTimestamp = null;
+
   updateDisplay(0);
   updateButtons();
   saveState();
 };
 
 const handleTick = () => {
-  if (state.status !== "running") {
-    return;
-  }
+  if (state.status !== "running") return;
+
   if (state.mode === "countdown") {
     const remaining = calculateRemainingSeconds();
     state.remainingSeconds = remaining;
     updateDisplay(remaining);
+
     if (remaining <= 0) {
       transitionToStopwatch();
       return;
@@ -222,6 +220,7 @@ const handleTick = () => {
     state.stopwatchElapsedSeconds = elapsed;
     updateDisplay(elapsed);
   }
+
   saveState();
 };
 
@@ -231,6 +230,7 @@ const applyPreset = (minutes) => {
   state.mode = "countdown";
   state.status = "stopped";
   state.countdownEndTimestamp = null;
+
   updateDisplay(state.remainingSeconds);
   updateButtons();
   saveState();
@@ -254,18 +254,17 @@ const hydrateState = () => {
       return;
     }
   }
+
   if (state.status === "running" && state.mode === "stopwatch") {
     if (!state.stopwatchStartTimestamp) {
       state.stopwatchStartTimestamp = Date.now() - state.stopwatchElapsedSeconds * 1000;
     }
   }
-  if (state.mode === "countdown") {
-    updateDisplay(state.remainingSeconds);
-  } else if (state.mode === "stopwatch") {
-    updateDisplay(state.stopwatchElapsedSeconds);
-  } else {
-    updateDisplay(0);
-  }
+
+  if (state.mode === "countdown") updateDisplay(state.remainingSeconds);
+  else if (state.mode === "stopwatch") updateDisplay(state.stopwatchElapsedSeconds);
+  else updateDisplay(0);
+
   updateButtons();
 };
 
@@ -278,6 +277,7 @@ startButton.addEventListener("click", handleStart);
 pauseButton.addEventListener("click", handlePauseResume);
 resetButton.addEventListener("click", handleReset);
 fullscreenButton.addEventListener("click", handleFullscreen);
+
 notifyToggle.addEventListener("change", () => {
   state.notify = notifyToggle.checked;
   if (state.notify && "Notification" in window && Notification.permission === "default") {
@@ -296,4 +296,3 @@ tickInterval = setInterval(handleTick, 250);
 handleTick();
 
 window.addEventListener("beforeunload", saveState);
-Add timer logic (app.js)
