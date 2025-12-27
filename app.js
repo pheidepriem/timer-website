@@ -6,7 +6,6 @@ const minutesInput = document.getElementById("minutesInput");
 const startButton = document.getElementById("startButton");
 const pauseButton = document.getElementById("pauseButton");
 const resetButton = document.getElementById("resetButton");
-const fullscreenButton = document.getElementById("fullscreenButton");
 const notifyToggle = document.getElementById("notifyToggle");
 const presetButtons = document.querySelectorAll(".preset");
 
@@ -237,13 +236,7 @@ const applyPreset = (minutes) => {
   saveState();
 };
 
-const handleFullscreen = () => {
-  if (!document.fullscreenElement) {
-    document.documentElement.requestFullscreen().catch(() => {});
-  } else {
-    document.exitFullscreen().catch(() => {});
-  }
-};
+
 
 const hydrateState = () => {
   if (state.status === "running" && state.mode === "countdown") {
@@ -277,7 +270,6 @@ hydrateState();
 startButton.addEventListener("click", handleStart);
 pauseButton.addEventListener("click", handlePauseResume);
 resetButton.addEventListener("click", handleReset);
-fullscreenButton.addEventListener("click", handleFullscreen);
 
 notifyToggle.addEventListener("change", () => {
   state.notify = notifyToggle.checked;
