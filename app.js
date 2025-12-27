@@ -1,4 +1,3 @@
-alert("app.js is running");
 const STORAGE_KEY = "kitchen-timer-state";
 
 const timeDisplay = document.getElementById("timeDisplay");
@@ -9,12 +8,25 @@ const resetButton = document.getElementById("resetButton");
 const notifyToggle = document.getElementById("notifyToggle");
 const presetButtons = document.querySelectorAll(".preset");
 
+// If any of these are missing, stop immediately with a clear message.
+const missing = [];
+if (!timeDisplay) missing.push("timeDisplay");
+if (!minutesInput) missing.push("minutesInput");
+if (!startButton) missing.push("startButton");
+if (!pauseButton) missing.push("pauseButton");
+if (!resetButton) missing.push("resetButton");
+if (!notifyToggle) missing.push("notifyToggle");
+if (missing.length) {
+  alert("Missing HTML elements: " + missing.join(", "));
+  throw new Error("Missing HTML elements: " + missing.join(", "));
+}
+
 let audioContext;
 let tickInterval;
 
 const state = {
-  mode: "idle",
-  status: "stopped",
+  mode: "idle", // idle | countdown | stopwatch
+  status: "stopped", // stopped | running | paused
   remainingSeconds: 0,
   stopwatchElapsedSeconds: 0,
   countdownEndTimestamp: null,
@@ -29,16 +41,13 @@ const formatTime = (totalSeconds) => {
   return `${String(hrs).padStart(2, "0")}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 };
 
-const saveState = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-};
+const saveState = () => localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 
 const loadState = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return;
   try {
-    const parsed = JSON.parse(saved);
-    Object.assign(state, parsed);
+    Object.assign(state, JSON.parse(saved));
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -49,8 +58,7 @@ const updateDisplay = (seconds) => {
 };
 
 const updateButtons = () => {
-  const isRunning = state.status === "running";
-  startButton.disabled = isRunning;
+  startButton.disabled = state.status === "running";
   pauseButton.textContent = state.status === "paused" ? "Resume" : "Pause";
 };
 
@@ -70,9 +78,7 @@ const warmAudio = () => {
   if (!audioContext) {
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
   }
-  if (audioContext.state === "suspended") {
-    audioContext.resume();
-  }
+  if (audioContext.state === "suspended") audioContext.resume();
 };
 
 const playAlertSound = () => {
@@ -96,9 +102,8 @@ const playAlertSound = () => {
 
 const triggerAlert = () => {
   playAlertSound();
-  if (navigator.vibrate) {
-    navigator.vibrate([200, 100, 200, 100, 200]);
-  }
+  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 200]);
+
   if (state.notify && "Notification" in window) {
     if (Notification.permission === "granted") {
       new Notification("Timer done", { body: "Countdown finished. Stopwatch started." });
@@ -154,10 +159,7 @@ const handleStart = () => {
   warmAudio();
   if (state.status === "running") return;
 
-  if (state.mode === "stopwatch") {
-    startStopwatch();
-    return;
-  }
+  if (state.mode === "stopwatch") return startStopwatch();
 
   const minutes = Number.parseInt(minutesInput.value, 10);
   if (Number.isNaN(minutes) || minutes <= 0) return;
@@ -211,10 +213,7 @@ const handleTick = () => {
     state.remainingSeconds = remaining;
     updateDisplay(remaining);
 
-    if (remaining <= 0) {
-      transitionToStopwatch();
-      return;
-    }
+    if (remaining <= 0) return transitionToStopwatch();
   } else if (state.mode === "stopwatch") {
     const elapsed = calculateStopwatchElapsed();
     state.stopwatchElapsedSeconds = elapsed;
@@ -236,36 +235,13 @@ const applyPreset = (minutes) => {
   saveState();
 };
 
-
-
-const hydrateState = () => {
-  if (state.status === "running" && state.mode === "countdown") {
-    if (!state.countdownEndTimestamp) {
-      state.countdownEndTimestamp = Date.now() + state.remainingSeconds * 1000;
-    }
-    if (state.countdownEndTimestamp <= Date.now()) {
-      transitionToStopwatch();
-      return;
-    }
-  }
-
-  if (state.status === "running" && state.mode === "stopwatch") {
-    if (!state.stopwatchStartTimestamp) {
-      state.stopwatchStartTimestamp = Date.now() - state.stopwatchElapsedSeconds * 1000;
-    }
-  }
-
-  if (state.mode === "countdown") updateDisplay(state.remainingSeconds);
-  else if (state.mode === "stopwatch") updateDisplay(state.stopwatchElapsedSeconds);
-  else updateDisplay(0);
-
-  updateButtons();
-};
-
 loadState();
 notifyToggle.checked = Boolean(state.notify);
 
-hydrateState();
+if (state.mode === "countdown") updateDisplay(state.remainingSeconds);
+else if (state.mode === "stopwatch") updateDisplay(state.stopwatchElapsedSeconds);
+else updateDisplay(0);
+updateButtons();
 
 startButton.addEventListener("click", handleStart);
 pauseButton.addEventListener("click", handlePauseResume);
@@ -280,9 +256,7 @@ notifyToggle.addEventListener("change", () => {
 });
 
 presetButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    applyPreset(Number(button.dataset.minutes));
-  });
+  button.addEventListener("click", () => applyPreset(Number(button.dataset.minutes)));
 });
 
 tickInterval = setInterval(handleTick, 250);
