@@ -8,33 +8,228 @@
   <style>
     :root {
       color-scheme: dark;
+      --bg: #0a0a0f;
+      --text: #fff;
+      --btn-bg: rgba(255,255,255,0.06);
+      --btn-border: rgba(255,255,255,0.18);
+      --btn-bg-primary: rgba(255,255,255,0.10);
+      --btn-border-primary: rgba(255,255,255,0.28);
+      --accent: #6ee7b7;
+      --ring-track: rgba(255,255,255,0.08);
+      --ring-fill: #6ee7b7;
+      --progress-glow: rgba(110, 231, 183, 0.3);
+    }
+
+    .theme-light {
+      color-scheme: light;
+      --bg: #f5f5f5;
+      --text: #1a1a1a;
+      --btn-bg: rgba(0,0,0,0.05);
+      --btn-border: rgba(0,0,0,0.15);
+      --btn-bg-primary: rgba(0,0,0,0.08);
+      --btn-border-primary: rgba(0,0,0,0.25);
+      --accent: #10b981;
+      --ring-track: rgba(0,0,0,0.08);
+      --ring-fill: #10b981;
+      --progress-glow: rgba(16, 185, 129, 0.3);
+    }
+
+    .theme-retro {
+      --bg: #1a1a2e;
+      --text: #00ff41;
+      --btn-bg: rgba(0,255,65,0.08);
+      --btn-border: rgba(0,255,65,0.3);
+      --btn-bg-primary: rgba(0,255,65,0.15);
+      --btn-border-primary: rgba(0,255,65,0.5);
+      --accent: #00ff41;
+      --ring-track: rgba(0,255,65,0.1);
+      --ring-fill: #00ff41;
+      --progress-glow: rgba(0,255,65,0.4);
+    }
+
+    .theme-neon {
+      --bg: #0d0221;
+      --text: #f472b6;
+      --btn-bg: rgba(244,114,182,0.08);
+      --btn-border: rgba(244,114,182,0.3);
+      --btn-bg-primary: rgba(244,114,182,0.15);
+      --btn-border-primary: rgba(244,114,182,0.5);
+      --accent: #f472b6;
+      --ring-track: rgba(244,114,182,0.1);
+      --ring-fill: #f472b6;
+      --progress-glow: rgba(244,114,182,0.4);
+    }
+
+    .theme-zen {
+      --bg: #1c1917;
+      --text: #d6d3d1;
+      --btn-bg: rgba(214,211,209,0.06);
+      --btn-border: rgba(214,211,209,0.15);
+      --btn-bg-primary: rgba(214,211,209,0.10);
+      --btn-border-primary: rgba(214,211,209,0.25);
+      --accent: #a8a29e;
+      --ring-track: rgba(214,211,209,0.08);
+      --ring-fill: #a8a29e;
+      --progress-glow: rgba(168,162,158,0.3);
+    }
+
+    * {
+      box-sizing: border-box;
     }
 
     body {
-      background: #000;
-      color: #fff;
+      background: var(--bg);
+      color: var(--text);
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      height: 100vh;
+      min-height: 100vh;
       margin: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       padding: 24px;
+      transition: background 1.5s ease, color 0.4s ease;
+      overflow-x: hidden;
     }
 
     .app {
-      width: min(900px, 100%);
+      width: min(960px, 100%);
       text-align: center;
+      position: relative;
+    }
+
+    /* Timer ring area */
+    .timer-area {
+      position: relative;
+      display: inline-block;
+      margin-bottom: 18px;
+    }
+
+    .ring-container {
+      position: relative;
+      width: clamp(220px, 45vw, 340px);
+      height: clamp(220px, 45vw, 340px);
+      cursor: pointer;
+    }
+
+    .ring-svg {
+      width: 100%;
+      height: 100%;
+      transform: rotate(-90deg);
+    }
+
+    .ring-track {
+      fill: none;
+      stroke: var(--ring-track);
+      stroke-width: 8;
+    }
+
+    .ring-fill {
+      fill: none;
+      stroke: var(--ring-fill);
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.3s ease, stroke 0.5s ease;
+      filter: drop-shadow(0 0 6px var(--progress-glow));
+    }
+
+    .ring-handle {
+      fill: var(--ring-fill);
+      filter: drop-shadow(0 0 8px var(--progress-glow));
+      cursor: grab;
+      transition: r 0.15s ease;
+    }
+
+    .ring-handle:hover {
+      r: 12;
+    }
+
+    .ring-handle:active {
+      cursor: grabbing;
     }
 
     #timeDisplay {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
       font-variant-numeric: tabular-nums;
-      font-size: clamp(56px, 10vw, 140px);
+      font-size: clamp(32px, 7vw, 64px);
       letter-spacing: 0.04em;
-      margin: 16px 0 22px;
       line-height: 1.05;
+      pointer-events: none;
+      transition: transform 0.1s ease;
     }
 
+    #timeDisplay.pulse {
+      animation: pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: translate(-50%, -50%) scale(1); }
+      50% { transform: translate(-50%, -50%) scale(1.06); }
+    }
+
+    /* Activity section */
+    .activity-section {
+      margin-bottom: 14px;
+    }
+
+    .activity-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+
+    #activityInput {
+      width: 200px;
+      font-size: 16px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      text-align: center;
+      outline: none;
+    }
+
+    #activityInput::placeholder {
+      opacity: 0.5;
+    }
+
+    .activity-presets {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .activity-preset {
+      font-size: 14px !important;
+      padding: 6px 12px !important;
+      border-radius: 20px !important;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    /* Illustration canvas */
+    .illustration-container {
+      margin: 10px auto 16px;
+      width: clamp(120px, 25vw, 180px);
+      height: clamp(120px, 25vw, 180px);
+      position: relative;
+    }
+
+    #illustrationCanvas {
+      width: 100%;
+      height: 100%;
+      border-radius: 16px;
+    }
+
+    /* Controls */
     .controls {
       display: grid;
       grid-template-columns: 1fr;
@@ -50,17 +245,18 @@
       justify-content: center;
     }
 
-    input, button {
-      font-size: 18px;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.18);
-      background: rgba(255,255,255,0.06);
-      color: #fff;
+    input[type="number"], button {
+      font-size: 16px;
+      padding: 14px 18px;
+      border-radius: 14px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      color: var(--text);
+      transition: all 0.2s ease;
     }
 
-    input {
-      width: 180px;
+    input[type="number"] {
+      width: 160px;
       text-align: center;
       outline: none;
     }
@@ -69,50 +265,214 @@
       cursor: pointer;
       user-select: none;
       -webkit-tap-highlight-color: transparent;
+      min-height: 48px;
+    }
+
+    button:hover:not(:disabled) {
+      background: var(--btn-bg-primary);
+      border-color: var(--btn-border-primary);
+    }
+
+    button:active:not(:disabled) {
+      transform: scale(0.96);
     }
 
     button:disabled {
-      opacity: 0.5;
+      opacity: 0.4;
       cursor: not-allowed;
     }
 
     .primary {
-      border-color: rgba(255,255,255,0.28);
-      background: rgba(255,255,255,0.10);
+      border-color: var(--btn-border-primary);
+      background: var(--btn-bg-primary);
       font-weight: 600;
+      min-width: 100px;
     }
 
     .presets button {
-      min-width: 72px;
+      min-width: 64px;
+      border-radius: 20px;
+      padding: 10px 16px;
+      font-weight: 500;
+    }
+
+    .bottom-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: center;
+      margin-top: 4px;
     }
 
     .toggles {
-      font-size: 16px;
+      font-size: 14px;
       opacity: 0.9;
-      margin-top: 2px;
     }
 
     .toggles label {
       display: inline-flex;
       align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
+      gap: 8px;
+      padding: 8px 12px;
       border-radius: 12px;
-      border: 1px solid rgba(255,255,255,0.12);
-      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      cursor: pointer;
+    }
+
+    /* Sound theme picker */
+    .sound-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .sound-picker button {
+      font-size: 14px !important;
+      padding: 6px 12px !important;
+      border-radius: 20px !important;
+      min-height: 36px;
+    }
+
+    .sound-picker button.active {
+      border-color: var(--accent);
+      background: var(--btn-bg-primary);
+    }
+
+    /* Theme picker */
+    .theme-picker {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .theme-picker button {
+      font-size: 13px !important;
+      padding: 6px 12px !important;
+      border-radius: 20px !important;
+      min-height: 36px;
+    }
+
+    .theme-picker button.active {
+      border-color: var(--accent);
+      background: var(--btn-bg-primary);
+    }
+
+    .fullscreen-btn {
+      font-size: 14px !important;
+      padding: 6px 12px !important;
+      min-height: 36px;
     }
 
     .hint {
       margin-top: 14px;
-      font-size: 14px;
-      opacity: 0.65;
+      font-size: 13px;
+      opacity: 0.5;
+    }
+
+    /* Confetti */
+    .confetti-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+      overflow: hidden;
+    }
+
+    .confetti-piece {
+      position: absolute;
+      width: 10px;
+      height: 10px;
+      top: -20px;
+      animation: confetti-fall 3s ease-out forwards;
+    }
+
+    @keyframes confetti-fall {
+      0% {
+        transform: translateY(0) rotate(0deg) scale(1);
+        opacity: 1;
+      }
+      100% {
+        transform: translateY(100vh) rotate(720deg) scale(0.3);
+        opacity: 0;
+      }
+    }
+
+    /* Times up banner */
+    .times-up {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%) scale(0);
+      font-size: clamp(36px, 8vw, 72px);
+      font-weight: 800;
+      color: var(--accent);
+      text-shadow: 0 0 40px var(--progress-glow);
+      pointer-events: none;
+      z-index: 10000;
+      animation: times-up-pop 2s ease-out forwards;
+      white-space: nowrap;
+    }
+
+    @keyframes times-up-pop {
+      0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+      15% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+      30% { transform: translate(-50%, -50%) scale(1); }
+      80% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+      100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
+    }
+
+    /* Responsive */
+    @media (max-width: 480px) {
+      body { padding: 16px; }
+      .ring-container {
+        width: 200px;
+        height: 200px;
+      }
     }
   </style>
 </head>
 
 <body>
   <main class="app">
-    <div id="timeDisplay">00:00:00</div>
+    <!-- Activity input -->
+    <section class="activity-section">
+      <div class="activity-row">
+        <input id="activityInput" type="text" placeholder="What are you timing?" maxlength="30" />
+      </div>
+      <div class="activity-presets">
+        <button class="activity-preset" data-activity="pizza">🍕 Pizza</button>
+        <button class="activity-preset" data-activity="laundry">👕 Laundry</button>
+        <button class="activity-preset" data-activity="eggs">🥚 Eggs</button>
+        <button class="activity-preset" data-activity="tea">🍵 Tea</button>
+        <button class="activity-preset" data-activity="workout">💪 Workout</button>
+        <button class="activity-preset" data-activity="nap">😴 Nap</button>
+      </div>
+    </section>
+
+    <!-- Illustration -->
+    <div class="illustration-container" id="illustrationContainer" style="display:none;">
+      <canvas id="illustrationCanvas" width="180" height="180"></canvas>
+    </div>
+
+    <!-- Timer ring -->
+    <div class="timer-area">
+      <div class="ring-container" id="ringContainer">
+        <svg class="ring-svg" viewBox="0 0 200 200">
+          <circle class="ring-track" cx="100" cy="100" r="88" />
+          <circle class="ring-fill" id="ringFill" cx="100" cy="100" r="88"
+                  stroke-dasharray="553" stroke-dashoffset="0" />
+          <circle class="ring-handle" id="ringHandle" cx="100" cy="12" r="9" style="display:none;" />
+        </svg>
+        <div id="timeDisplay">00:00</div>
+      </div>
+    </div>
 
     <section class="controls">
       <div class="row">
@@ -134,20 +494,43 @@
         <button id="resetButton">Reset</button>
       </div>
 
-      <div class="row toggles">
-        <label>
-          <input id="notifyToggle" type="checkbox" />
-          Notifications
-        </label>
+      <!-- Sound themes -->
+      <div class="row">
+        <span style="font-size:13px;opacity:0.6;">Sound:</span>
+        <div class="sound-picker">
+          <button class="sound-theme active" data-sound="chime">🔔 Chime</button>
+          <button class="sound-theme" data-sound="bell">🛎️ Bell</button>
+          <button class="sound-theme" data-sound="gong">🎵 Gong</button>
+          <button class="sound-theme" data-sound="arcade">👾 Arcade</button>
+        </div>
+      </div>
+
+      <div class="bottom-controls">
+        <div class="toggles">
+          <label>
+            <input id="notifyToggle" type="checkbox" />
+            Notify
+          </label>
+        </div>
+
+        <!-- Theme picker -->
+        <div class="theme-picker">
+          <button class="theme-btn active" data-theme="dark">Dark</button>
+          <button class="theme-btn" data-theme="light">Light</button>
+          <button class="theme-btn" data-theme="retro">Retro</button>
+          <button class="theme-btn" data-theme="neon">Neon</button>
+          <button class="theme-btn" data-theme="zen">Zen</button>
+        </div>
+
+        <button class="fullscreen-btn" id="fullscreenBtn">⛶ Fullscreen</button>
       </div>
 
       <div class="hint">
-        Tip: Start a timer, then minimize the tab. It will stay accurate when you return.
+        Tip: Drag the ring to set time · Space to start/pause · R to reset
       </div>
     </section>
   </main>
 
-  <!-- This must exist in the same folder as this HTML file -->
   <script src="app.js" defer></script>
 </body>
 </html>
