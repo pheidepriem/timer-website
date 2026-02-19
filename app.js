@@ -1,6 +1,32 @@
 const STORAGE_KEY = "kitchen-timer-state";
 const CIRCUMFERENCE = 2 * Math.PI * 88; // ~553
 
+// Polyfill for roundRect (not available in all browsers)
+if (typeof CanvasRenderingContext2D !== "undefined" && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, radii) {
+    let r;
+    if (typeof radii === "number") {
+      r = { tl: radii, tr: radii, br: radii, bl: radii };
+    } else if (Array.isArray(radii)) {
+      if (radii.length === 4) r = { tl: radii[0], tr: radii[1], br: radii[2], bl: radii[3] };
+      else r = { tl: radii[0] || 0, tr: radii[0] || 0, br: radii[0] || 0, bl: radii[0] || 0 };
+    } else {
+      r = { tl: 0, tr: 0, br: 0, bl: 0 };
+    }
+    this.moveTo(x + r.tl, y);
+    this.lineTo(x + w - r.tr, y);
+    this.quadraticCurveTo(x + w, y, x + w, y + r.tr);
+    this.lineTo(x + w, y + h - r.br);
+    this.quadraticCurveTo(x + w, y + h, x + w - r.br, y + h);
+    this.lineTo(x + r.bl, y + h);
+    this.quadraticCurveTo(x, y + h, x, y + h - r.bl);
+    this.lineTo(x, y + r.tl);
+    this.quadraticCurveTo(x, y, x + r.tl, y);
+    this.closePath();
+    return this;
+  };
+}
+
 // DOM elements
 const timeDisplay = document.getElementById("timeDisplay");
 const minutesInput = document.getElementById("minutesInput");
@@ -36,7 +62,7 @@ let audioContext;
 let tickInterval;
 let illustrationAnimFrame;
 
-const state = {
+const defaultState = {
   mode: "idle",
   status: "stopped",
   remainingSeconds: 0,
@@ -48,6 +74,17 @@ const state = {
   soundTheme: "chime",
   visualTheme: "dark",
   activity: "",
+};
+
+const state = Object.assign({}, defaultState);
+
+// ─── Helper: resolve CSS variable to actual color ────────
+const getAccentColor = () => {
+  return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#6ee7b7";
+};
+
+const getBgColor = () => {
+  return getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#0a0a0f";
 };
 
 // ─── Formatting ──────────────────────────────────────────
@@ -68,7 +105,13 @@ const loadState = () => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (!saved) return;
   try {
-    Object.assign(state, JSON.parse(saved));
+    const parsed = JSON.parse(saved);
+    // Only copy known keys to avoid stale/corrupt data
+    for (const key of Object.keys(defaultState)) {
+      if (key in parsed) {
+        state[key] = parsed[key];
+      }
+    }
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -85,11 +128,9 @@ const updateButtons = () => {
 };
 
 const updateRing = (progress) => {
-  // progress: 0 = empty, 1 = full
   const offset = CIRCUMFERENCE * (1 - Math.max(0, Math.min(1, progress)));
   ringFill.setAttribute("stroke-dashoffset", offset);
 
-  // Position handle
   const angle = progress * 2 * Math.PI;
   const hx = 100 + 88 * Math.cos(angle - Math.PI / 2);
   const hy = 100 + 88 * Math.sin(angle - Math.PI / 2);
@@ -100,10 +141,8 @@ const updateRing = (progress) => {
 // ─── Color-changing background ───────────────────────────
 const updateBackgroundColor = (progress) => {
   if (state.mode !== "countdown" || state.status !== "running") return;
-  if (state.visualTheme !== "dark") return; // only apply gradient on dark theme
+  if (state.visualTheme !== "dark") return;
 
-  // progress goes from 1 (start) to 0 (done)
-  // Blue → Orange → Red
   const r = Math.round(10 + (1 - progress) * 60);
   const g = Math.round(10 + progress * 20 - (1 - progress) * 10);
   const b = Math.round(15 + progress * 30);
@@ -151,7 +190,6 @@ const playSound = (theme) => {
   const t = audioContext.currentTime;
 
   if (theme === "chime") {
-    // Bright chime - two harmonics
     [880, 1320].forEach((freq, i) => {
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
@@ -165,7 +203,6 @@ const playSound = (theme) => {
       osc.stop(t + 1.5);
     });
   } else if (theme === "bell") {
-    // Deep bell
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
     osc.type = "sine";
@@ -178,7 +215,6 @@ const playSound = (theme) => {
     osc.start(t);
     osc.stop(t + 2.5);
   } else if (theme === "gong") {
-    // Rich gong with harmonics
     [130, 260, 390].forEach((freq, i) => {
       const osc = audioContext.createOscillator();
       const gain = audioContext.createGain();
@@ -192,7 +228,6 @@ const playSound = (theme) => {
       osc.stop(t + 3);
     });
   } else if (theme === "arcade") {
-    // Fun retro arcade sound
     const notes = [523, 659, 784, 1047];
     notes.forEach((freq, i) => {
       const osc = audioContext.createOscillator();
@@ -402,6 +437,23 @@ const applyPreset = (minutes) => {
   saveState();
 };
 
+// ─── Event listeners (registered early so they always work) ──
+startButton.addEventListener("click", handleStart);
+pauseButton.addEventListener("click", handlePauseResume);
+resetButton.addEventListener("click", handleReset);
+
+notifyToggle.addEventListener("change", () => {
+  state.notify = notifyToggle.checked;
+  if (state.notify && "Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
+  saveState();
+});
+
+presetButtons.forEach((button) => {
+  button.addEventListener("click", () => applyPreset(Number(button.dataset.minutes)));
+});
+
 // ─── Drag-to-set on ring ─────────────────────────────────
 let isDragging = false;
 const MAX_DRAG_MINUTES = 60;
@@ -430,7 +482,6 @@ const setTimeFromAngle = (angle) => {
   updateDisplay(state.remainingSeconds);
   updateRing(1);
 
-  // Show handle position
   const hx = 100 + 88 * Math.cos(angle - Math.PI / 2);
   const hy = 100 + 88 * Math.sin(angle - Math.PI / 2);
   ringHandle.setAttribute("cx", hx);
@@ -471,14 +522,11 @@ document.addEventListener("touchend", onDragEnd);
 
 // ─── Keyboard shortcuts ──────────────────────────────────
 document.addEventListener("keydown", (e) => {
-  // Ignore if typing in an input
   if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
 
   if (e.code === "Space") {
     e.preventDefault();
-    if (state.status === "running") {
-      handlePauseResume();
-    } else if (state.status === "paused") {
+    if (state.status === "running" || state.status === "paused") {
       handlePauseResume();
     } else {
       handleStart();
@@ -558,7 +606,6 @@ const detectActivity = (text) => {
   for (const key of Object.keys(knownActivities)) {
     if (lower.includes(key)) return key;
   }
-  // Broader matching
   if (lower.includes("cook") || lower.includes("bak") || lower.includes("oven") || lower.includes("roast")) return "pizza";
   if (lower.includes("wash") || lower.includes("cloth") || lower.includes("dryer") || lower.includes("spin")) return "laundry";
   if (lower.includes("boil") || lower.includes("egg")) return "eggs";
@@ -622,19 +669,24 @@ const getTimerProgress = () => {
 
 const drawIllustration = () => {
   if (!ctx || !currentIllustration) return;
-  const W = 180, H = 180;
-  ctx.clearRect(0, 0, W, H);
 
-  const progress = getTimerProgress();
-  const t = (Date.now() - illustrationStartTime) / 1000;
+  try {
+    const W = 180, H = 180;
+    ctx.clearRect(0, 0, W, H);
 
-  switch (currentIllustration) {
-    case "pizza": drawPizza(progress, t); break;
-    case "laundry": drawLaundry(progress, t); break;
-    case "eggs": drawEggs(progress, t); break;
-    case "tea": drawTea(progress, t); break;
-    case "workout": drawWorkout(progress, t); break;
-    case "nap": drawNap(progress, t); break;
+    const progress = getTimerProgress();
+    const t = (Date.now() - illustrationStartTime) / 1000;
+
+    switch (currentIllustration) {
+      case "pizza": drawPizza(progress, t); break;
+      case "laundry": drawLaundry(progress, t); break;
+      case "eggs": drawEggs(progress, t); break;
+      case "tea": drawTea(progress, t); break;
+      case "workout": drawWorkout(progress, t); break;
+      case "nap": drawNap(progress, t); break;
+    }
+  } catch (e) {
+    // Don't let illustration errors break the app
   }
 
   illustrationAnimFrame = requestAnimationFrame(drawIllustration);
@@ -642,8 +694,7 @@ const drawIllustration = () => {
 
 // --- Pizza illustration ---
 const drawPizza = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2 + 10;
+  const cx = 90, cy = 100;
   const r = 55;
 
   // Oven background
@@ -660,12 +711,12 @@ const drawPizza = (progress, t) => {
 
   // Oven glow based on progress
   const glowIntensity = 0.15 + progress * 0.35;
-  ctx.fillStyle = `rgba(255, ${120 - progress * 60}, 0, ${glowIntensity})`;
+  ctx.fillStyle = `rgba(255, ${Math.round(120 - progress * 60)}, 0, ${glowIntensity})`;
   ctx.beginPath();
   ctx.roundRect(25, 20, 130, 120, 8);
   ctx.fill();
 
-  // Pizza base - gets more golden/brown over time
+  // Pizza base
   const baseR = 200 + Math.floor(progress * 40);
   const baseG = 180 - Math.floor(progress * 80);
   const baseB = 100 - Math.floor(progress * 60);
@@ -680,14 +731,14 @@ const drawPizza = (progress, t) => {
   ctx.arc(cx, cy, r - 8, 0, Math.PI * 2);
   ctx.fill();
 
-  // Cheese - melts and bubbles as it cooks
+  // Cheese
   const cheeseAlpha = 0.6 + progress * 0.4;
   ctx.fillStyle = `rgba(${255 - Math.floor(progress * 30)}, ${200 - Math.floor(progress * 30)}, ${60 + Math.floor(progress * 20)}, ${cheeseAlpha})`;
   ctx.beginPath();
   ctx.arc(cx, cy, r - 12, 0, Math.PI * 2);
   ctx.fill();
 
-  // Cheese bubbles (more as it cooks)
+  // Cheese bubbles
   const bubbleCount = Math.floor(progress * 8);
   for (let i = 0; i < bubbleCount; i++) {
     const angle = (i / 8) * Math.PI * 2 + t * 0.3;
@@ -703,7 +754,7 @@ const drawPizza = (progress, t) => {
 
   // Pepperoni
   const pepPositions = [[-18, -15], [15, -10], [0, 18], [-12, 12], [18, 12]];
-  pepPositions.forEach(([ox, oy], i) => {
+  pepPositions.forEach(([ox, oy]) => {
     const pepR = Math.min(150 + progress * 60, 200);
     const pepG = Math.min(30 + progress * 20, 60);
     ctx.fillStyle = `rgb(${pepR}, ${pepG}, 20)`;
@@ -711,7 +762,6 @@ const drawPizza = (progress, t) => {
     ctx.arc(cx + ox, cy + oy, 6, 0, Math.PI * 2);
     ctx.fill();
 
-    // Slight crisp on edges
     if (progress > 0.6) {
       ctx.strokeStyle = `rgba(80, 20, 0, ${(progress - 0.6) * 2})`;
       ctx.lineWidth = 1;
@@ -719,7 +769,7 @@ const drawPizza = (progress, t) => {
     }
   });
 
-  // Steam (more as it cooks)
+  // Steam
   if (progress > 0.2) {
     const steamAlpha = (progress - 0.2) * 0.5;
     for (let i = 0; i < 3; i++) {
@@ -747,8 +797,7 @@ const drawPizza = (progress, t) => {
 
 // --- Laundry illustration ---
 const drawLaundry = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2;
+  const cx = 90, cy = 90;
 
   // Washing machine body
   ctx.fillStyle = "#e8e8e8";
@@ -792,13 +841,12 @@ const drawLaundry = (progress, t) => {
   ctx.arc(cx, cy + 15, 44, 0, Math.PI * 2);
   ctx.fill();
 
-  // Water level based on progress
+  // Water level
   ctx.save();
   ctx.beginPath();
   ctx.arc(cx, cy + 15, 42, 0, Math.PI * 2);
   ctx.clip();
 
-  // Water with wave
   const waterLevel = cy + 15 + 20 - progress * 10;
   ctx.fillStyle = "rgba(100, 180, 255, 0.3)";
   ctx.beginPath();
@@ -822,7 +870,6 @@ const drawLaundry = (progress, t) => {
     const clothY = (cy + 15) + Math.sin(angle) * dist;
     ctx.fillStyle = color;
     ctx.beginPath();
-    // Cloth shape - slightly organic
     const size = 8 + Math.sin(t * 3 + i * 2) * 2;
     ctx.ellipse(clothX, clothY, size, size * 0.7, angle, 0, Math.PI * 2);
     ctx.fill();
@@ -860,8 +907,7 @@ const drawLaundry = (progress, t) => {
 
 // --- Eggs illustration ---
 const drawEggs = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2 + 10;
+  const cx = 90, cy = 100;
 
   // Pot
   ctx.fillStyle = "#777";
@@ -883,7 +929,7 @@ const drawEggs = (progress, t) => {
   ctx.fillStyle = "rgba(120, 200, 255, 0.4)";
   ctx.fillRect(35, 68, 110, 70);
 
-  // Bubbles (more as it cooks)
+  // Bubbles
   const bubbleCount = Math.floor(2 + progress * 12);
   for (let i = 0; i < bubbleCount; i++) {
     const bx = 50 + (i * 37) % 80;
@@ -898,7 +944,6 @@ const drawEggs = (progress, t) => {
   // Eggs
   const eggPositions = [[-20, 5], [0, 8], [20, 3]];
   eggPositions.forEach(([ox, oy]) => {
-    // Egg color changes from white to slightly off-white as it cooks
     const eggR = 255 - Math.floor(progress * 20);
     const eggG = 250 - Math.floor(progress * 25);
     const eggB = 240 - Math.floor(progress * 30);
@@ -936,7 +981,7 @@ const drawEggs = (progress, t) => {
   ctx.fill();
 
   // Stove top indicator
-  const stoveColor = progress > 0 ? `rgba(255, ${100 - progress * 80}, 0, ${0.4 + progress * 0.4})` : "rgba(100,100,100,0.3)";
+  const stoveColor = progress > 0 ? `rgba(255, ${Math.round(100 - progress * 80)}, 0, ${0.4 + progress * 0.4})` : "rgba(100,100,100,0.3)";
   ctx.strokeStyle = stoveColor;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -946,8 +991,7 @@ const drawEggs = (progress, t) => {
 
 // --- Tea illustration ---
 const drawTea = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2 + 15;
+  const cx = 90, cy = 105;
 
   // Saucer
   ctx.fillStyle = "#e8e0d0";
@@ -972,7 +1016,7 @@ const drawTea = (progress, t) => {
   ctx.arc(cx + 42, cy + 8, 14, -Math.PI / 2, Math.PI / 2);
   ctx.stroke();
 
-  // Tea liquid - gets darker as it steeps
+  // Tea liquid
   const teaR = 200 - Math.floor(progress * 80);
   const teaG = 160 - Math.floor(progress * 70);
   const teaB = 80 - Math.floor(progress * 40);
@@ -997,7 +1041,7 @@ const drawTea = (progress, t) => {
   ctx.fillStyle = "#d4c4a8";
   ctx.fillRect(cx - 26, cy - 33, 12, 10);
 
-  // Tea bag in water (bobs slightly)
+  // Tea bag in water
   const bobY = Math.sin(t * 1.5) * 2;
   ctx.fillStyle = "#b8a080";
   ctx.beginPath();
@@ -1007,10 +1051,10 @@ const drawTea = (progress, t) => {
   // Steeping color diffusion
   if (progress > 0 && progress < 0.8) {
     const diffAlpha = 0.15 + progress * 0.15;
-    const grad = ctx.createRadialGradient(cx - 5, cy + bobY + 10, 2, cx - 5, cy + bobY + 10, 30 + progress * 20);
-    grad.addColorStop(0, `rgba(${150 - progress * 50}, ${100 - progress * 40}, 30, ${diffAlpha})`);
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = grad;
+    const diffGrad = ctx.createRadialGradient(cx - 5, cy + bobY + 10, 2, cx - 5, cy + bobY + 10, 30 + progress * 20);
+    diffGrad.addColorStop(0, `rgba(${Math.round(150 - progress * 50)}, ${Math.round(100 - progress * 40)}, 30, ${diffAlpha})`);
+    diffGrad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = diffGrad;
     ctx.fillRect(cx - 33, cy - 15, 66, 50);
   }
 
@@ -1030,20 +1074,18 @@ const drawTea = (progress, t) => {
 
 // --- Workout illustration ---
 const drawWorkout = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2;
+  const cx = 90, cy = 90;
+  const accent = getAccentColor();
 
   // Floor
   ctx.fillStyle = "rgba(255,255,255,0.05)";
   ctx.fillRect(10, 145, 160, 3);
 
-  // Stick figure doing exercises
   const bounce = Math.sin(t * 4) * 5;
-  const armAngle = Math.sin(t * 3) * 0.6;
 
   // Head
-  ctx.strokeStyle = "var(--accent)";
-  ctx.fillStyle = "var(--accent)";
+  ctx.strokeStyle = accent;
+  ctx.fillStyle = accent;
   const headY = cy - 30 + bounce * 0.3;
   ctx.lineWidth = 3;
   ctx.beginPath();
@@ -1058,7 +1100,7 @@ const drawWorkout = (progress, t) => {
   ctx.lineTo(cx, bodyBottom);
   ctx.stroke();
 
-  // Arms - push up/down motion
+  // Arms
   ctx.beginPath();
   ctx.moveTo(cx, bodyTop + 10);
   ctx.lineTo(cx - 25, bodyTop + 10 + Math.sin(t * 3) * 20);
@@ -1068,24 +1110,23 @@ const drawWorkout = (progress, t) => {
   ctx.lineTo(cx + 25, bodyTop + 10 + Math.sin(t * 3 + Math.PI) * 20);
   ctx.stroke();
 
-  // Dumbbells in hands
+  // Dumbbells
   if (progress > 0) {
-    const lx = cx - 25, ly = bodyTop + 10 + Math.sin(t * 3) * 20;
-    const rx = cx + 25, ry = bodyTop + 10 + Math.sin(t * 3 + Math.PI) * 20;
+    const ly = bodyTop + 10 + Math.sin(t * 3) * 20;
+    const ry = bodyTop + 10 + Math.sin(t * 3 + Math.PI) * 20;
     ctx.lineWidth = 4;
     ctx.beginPath();
-    ctx.moveTo(lx - 8, ly);
-    ctx.lineTo(lx + 8, ly);
+    ctx.moveTo(cx - 25 - 8, ly);
+    ctx.lineTo(cx - 25 + 8, ly);
     ctx.stroke();
     ctx.beginPath();
-    ctx.moveTo(rx - 8, ry);
-    ctx.lineTo(rx + 8, ry);
+    ctx.moveTo(cx + 25 - 8, ry);
+    ctx.lineTo(cx + 25 + 8, ry);
     ctx.stroke();
     ctx.lineWidth = 3;
   }
 
   // Legs
-  const legAngle = Math.sin(t * 4) * 0.3;
   ctx.beginPath();
   ctx.moveTo(cx, bodyBottom);
   ctx.lineTo(cx - 15, 145);
@@ -1095,7 +1136,7 @@ const drawWorkout = (progress, t) => {
   ctx.lineTo(cx + 15, 145);
   ctx.stroke();
 
-  // Sweat drops (more with progress)
+  // Sweat drops
   const sweatCount = Math.floor(progress * 6);
   for (let i = 0; i < sweatCount; i++) {
     const sx = cx + (i % 2 === 0 ? -1 : 1) * (18 + i * 3);
@@ -1107,21 +1148,22 @@ const drawWorkout = (progress, t) => {
     ctx.fill();
   }
 
-  // Progress bar at bottom
+  // Progress bar
   ctx.fillStyle = "rgba(255,255,255,0.1)";
   ctx.beginPath();
   ctx.roundRect(30, 158, 120, 8, 4);
   ctx.fill();
-  ctx.fillStyle = "var(--accent)";
+  ctx.fillStyle = accent;
   ctx.beginPath();
-  ctx.roundRect(30, 158, 120 * progress, 8, 4);
+  ctx.roundRect(30, 158, Math.max(0, 120 * progress), 8, 4);
   ctx.fill();
 };
 
 // --- Nap illustration ---
 const drawNap = (progress, t) => {
-  const W = 180, H = 180;
-  const cx = W / 2, cy = H / 2 + 10;
+  const cx = 90, cy = 100;
+  const accent = getAccentColor();
+  const bg = getBgColor();
 
   // Pillow
   ctx.fillStyle = "#e8e0d0";
@@ -1136,7 +1178,6 @@ const drawNap = (progress, t) => {
   ctx.fillStyle = blanketGrad;
   ctx.beginPath();
   ctx.moveTo(cx - 50, cy + 5);
-  // Wavy top edge
   for (let x = cx - 50; x <= cx + 50; x += 2) {
     ctx.lineTo(x, cy + 5 + Math.sin((x - cx) * 0.08) * 3);
   }
@@ -1145,7 +1186,7 @@ const drawNap = (progress, t) => {
   ctx.closePath();
   ctx.fill();
 
-  // Face/head on pillow
+  // Face/head
   ctx.fillStyle = "#f5d0b0";
   ctx.beginPath();
   ctx.arc(cx, cy - 5, 20, 0, Math.PI * 2);
@@ -1154,21 +1195,19 @@ const drawNap = (progress, t) => {
   // Closed eyes
   ctx.strokeStyle = "#8b6b50";
   ctx.lineWidth = 2;
-  // Left eye
   ctx.beginPath();
   ctx.arc(cx - 7, cy - 7, 4, 0, Math.PI);
   ctx.stroke();
-  // Right eye
   ctx.beginPath();
   ctx.arc(cx + 7, cy - 7, 4, 0, Math.PI);
   ctx.stroke();
 
-  // Slight smile
+  // Smile
   ctx.beginPath();
   ctx.arc(cx, cy, 6, 0.2, Math.PI - 0.2);
   ctx.stroke();
 
-  // Breathing animation - chest rises
+  // Breathing
   const breathe = Math.sin(t * 1.5) * 2;
   ctx.fillStyle = "#6e8cc0";
   ctx.beginPath();
@@ -1176,10 +1215,9 @@ const drawNap = (progress, t) => {
   ctx.fill();
 
   // Z's floating up
-  const zCount = 3;
   ctx.font = "bold 16px system-ui";
-  ctx.fillStyle = "var(--accent)";
-  for (let i = 0; i < zCount; i++) {
+  ctx.fillStyle = accent;
+  for (let i = 0; i < 3; i++) {
     const zx = cx + 30 + i * 8 + Math.sin(t + i) * 3;
     const zy = cy - 20 - i * 18 - ((t * 15) % 20);
     const alpha = 0.7 - i * 0.2;
@@ -1188,13 +1226,12 @@ const drawNap = (progress, t) => {
   }
   ctx.globalAlpha = 1;
 
-  // Moon and stars (night scene)
+  // Moon
   ctx.fillStyle = "#ffd700";
   ctx.beginPath();
   ctx.arc(140, 25, 12, 0, Math.PI * 2);
   ctx.fill();
-  // Moon shadow
-  ctx.fillStyle = "var(--bg, #0a0a0f)";
+  ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.arc(145, 22, 10, 0, Math.PI * 2);
   ctx.fill();
@@ -1213,7 +1250,6 @@ const drawNap = (progress, t) => {
 // ─── Initialize ──────────────────────────────────────────
 loadState();
 
-// Restore UI from state
 notifyToggle.checked = Boolean(state.notify);
 
 if (state.activity) {
@@ -1221,14 +1257,12 @@ if (state.activity) {
   updateActivity();
 }
 
-// Restore sound theme
 if (state.soundTheme) {
   soundThemeBtns.forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.sound === state.soundTheme);
   });
 }
 
-// Restore visual theme
 if (state.visualTheme) {
   applyTheme(state.visualTheme);
   themeBtns.forEach((btn) => {
@@ -1250,23 +1284,6 @@ if (state.mode === "countdown") {
 }
 
 updateButtons();
-
-// ─── Event listeners ─────────────────────────────────────
-startButton.addEventListener("click", handleStart);
-pauseButton.addEventListener("click", handlePauseResume);
-resetButton.addEventListener("click", handleReset);
-
-notifyToggle.addEventListener("change", () => {
-  state.notify = notifyToggle.checked;
-  if (state.notify && "Notification" in window && Notification.permission === "default") {
-    Notification.requestPermission();
-  }
-  saveState();
-});
-
-presetButtons.forEach((button) => {
-  button.addEventListener("click", () => applyPreset(Number(button.dataset.minutes)));
-});
 
 tickInterval = setInterval(handleTick, 250);
 handleTick();
