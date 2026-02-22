@@ -428,6 +428,27 @@
       100% { transform: translate(-50%, -50%) scale(0.8); opacity: 0; }
     }
 
+    /* Fun fact banner */
+    #funFact {
+      margin: 0 auto 12px;
+      max-width: 380px;
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid var(--btn-border);
+      background: var(--btn-bg);
+      opacity: 0.85;
+      transition: opacity 0.4s ease;
+    }
+
+    /* Stats bar */
+    #statsBar {
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: 0.6;
+    }
+
     /* Responsive */
     @media (max-width: 480px) {
       body { padding: 16px; }
@@ -452,6 +473,7 @@
         <button class="activity-preset" data-activity="eggs">🥚 Eggs</button>
         <button class="activity-preset" data-activity="tea">🍵 Tea</button>
         <button class="activity-preset" data-activity="workout">💪 Workout</button>
+        <button class="activity-preset" data-activity="quiche">🥧 Quiche</button>
         <button class="activity-preset" data-activity="nap">😴 Nap</button>
       </div>
     </section>
@@ -460,6 +482,9 @@
     <div class="illustration-container" id="illustrationContainer" style="display:none;">
       <canvas id="illustrationCanvas" width="180" height="180"></canvas>
     </div>
+
+    <!-- Fun fact -->
+    <div id="funFact" style="display:none;"></div>
 
     <!-- Timer ring -->
     <div class="timer-area">
@@ -524,6 +549,8 @@
 
         <button class="fullscreen-btn" id="fullscreenBtn">⛶ Fullscreen</button>
       </div>
+
+      <div id="statsBar" style="display:none;"></div>
 
       <div class="hint">
         Tip: Drag the ring to set time · Space to start/pause · R to reset
@@ -661,16 +688,7 @@ const updateRing = (progress) => {
   ringHandle.setAttribute("cy", hy);
 };
 
-// ─── Color-changing background ───────────────────────────
-const updateBackgroundColor = (progress) => {
-  if (state.mode !== "countdown" || state.status !== "running") return;
-  if (state.visualTheme !== "dark") return;
-
-  const r = Math.round(10 + (1 - progress) * 60);
-  const g = Math.round(10 + progress * 20 - (1 - progress) * 10);
-  const b = Math.round(15 + progress * 30);
-  document.body.style.background = `rgb(${r}, ${Math.max(0, g)}, ${b})`;
-};
+// ─── Background (theme-only, no countdown color shifts) ──
 
 const resetBackground = () => {
   document.body.style.background = "";
@@ -825,6 +843,8 @@ const triggerAlert = () => {
 // ─── Timer transitions ──────────────────────────────────
 const transitionToStopwatch = () => {
   triggerAlert();
+  recordCompletion();
+  hideFunFact();
   const now = Date.now();
   const elapsed = state.countdownEndTimestamp ? Math.max(0, Math.floor((now - state.countdownEndTimestamp) / 1000)) : 0;
 
@@ -855,6 +875,14 @@ const startCountdown = (minutes) => {
   updateRing(1);
   ringHandle.style.display = "none";
   updateButtons();
+
+  // Show a fun fact if an activity is set
+  if (detectActivity(state.activity)) {
+    showFunFact();
+    if (funFactInterval) clearInterval(funFactInterval);
+    funFactInterval = setInterval(showFunFact, 15000);
+  }
+
   saveState();
 };
 
@@ -917,6 +945,7 @@ const handleReset = () => {
   updateButtons();
   updateRing(0);
   resetBackground();
+  hideFunFact();
   timeDisplay.classList.remove("pulse");
   ringHandle.style.display = "none";
   saveState();
@@ -932,7 +961,6 @@ const handleTick = () => {
 
     const progress = state.totalSeconds > 0 ? remaining / state.totalSeconds : 0;
     updateRing(progress);
-    updateBackgroundColor(progress);
     updatePulse(remaining);
 
     if (remaining <= 0) return transitionToStopwatch();
@@ -1114,9 +1142,11 @@ themeBtns.forEach((btn) => {
 
 // ─── Activity & Illustrations ────────────────────────────
 const ctx = illustrationCanvas ? illustrationCanvas.getContext("2d") : null;
+const funFactEl = document.getElementById("funFact");
+const statsBarEl = document.getElementById("statsBar");
 
 const knownActivities = {
-  pizza: true, laundry: true, eggs: true, tea: true, workout: true, nap: true,
+  pizza: true, laundry: true, eggs: true, tea: true, workout: true, nap: true, quiche: true,
 };
 
 const detectActivity = (text) => {
@@ -1130,6 +1160,7 @@ const detectActivity = (text) => {
   if (lower.includes("coffee") || lower.includes("brew") || lower.includes("steep")) return "tea";
   if (lower.includes("exercise") || lower.includes("run") || lower.includes("plank") || lower.includes("gym")) return "workout";
   if (lower.includes("sleep") || lower.includes("rest") || lower.includes("break")) return "nap";
+  if (lower.includes("pastry") || lower.includes("tart") || lower.includes("pie") || lower.includes("souffle")) return "quiche";
   return null;
 };
 
@@ -1202,6 +1233,7 @@ const drawIllustration = () => {
       case "tea": drawTea(progress, t); break;
       case "workout": drawWorkout(progress, t); break;
       case "nap": drawNap(progress, t); break;
+      case "quiche": drawQuiche(progress, t); break;
     }
   } catch (e) {
     // Don't let illustration errors break the app
@@ -1210,504 +1242,536 @@ const drawIllustration = () => {
   illustrationAnimFrame = requestAnimationFrame(drawIllustration);
 };
 
-// --- Pizza illustration ---
-const drawPizza = (progress, t) => {
-  const cx = 90, cy = 100;
-  const r = 55;
-
-  ctx.fillStyle = "#3d2b1f";
-  ctx.beginPath();
-  ctx.roundRect(15, 10, 150, 160, 12);
-  ctx.fill();
-
-  ctx.fillStyle = "#1a0f0a";
-  ctx.beginPath();
-  ctx.roundRect(25, 20, 130, 120, 8);
-  ctx.fill();
-
-  const glowIntensity = 0.15 + progress * 0.35;
-  ctx.fillStyle = `rgba(255, ${Math.round(120 - progress * 60)}, 0, ${glowIntensity})`;
-  ctx.beginPath();
-  ctx.roundRect(25, 20, 130, 120, 8);
-  ctx.fill();
-
-  const baseR = 200 + Math.floor(progress * 40);
-  const baseG = 180 - Math.floor(progress * 80);
-  const baseB = 100 - Math.floor(progress * 60);
-  ctx.fillStyle = `rgb(${baseR}, ${baseG}, ${baseB})`;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-
-  ctx.fillStyle = `rgb(${180 + Math.floor(progress * 40)}, ${40 + Math.floor(progress * 15)}, 20)`;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r - 8, 0, Math.PI * 2);
-  ctx.fill();
-
-  const cheeseAlpha = 0.6 + progress * 0.4;
-  ctx.fillStyle = `rgba(${255 - Math.floor(progress * 30)}, ${200 - Math.floor(progress * 30)}, ${60 + Math.floor(progress * 20)}, ${cheeseAlpha})`;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r - 12, 0, Math.PI * 2);
-  ctx.fill();
-
-  const bubbleCount = Math.floor(progress * 8);
-  for (let i = 0; i < bubbleCount; i++) {
-    const angle = (i / 8) * Math.PI * 2 + t * 0.3;
-    const dist = 15 + (i % 3) * 10;
-    const bx = cx + Math.cos(angle) * dist;
-    const by = cy + Math.sin(angle) * dist;
-    const br = 3 + Math.sin(t * 2 + i) * 1.5;
-    ctx.fillStyle = `rgba(255, 180, 0, ${0.4 + Math.sin(t * 3 + i) * 0.2})`;
-    ctx.beginPath();
-    ctx.arc(bx, by, br, 0, Math.PI * 2);
-    ctx.fill();
+// ─── Cute drawing helpers ────────────────────────────────
+const OL = 2.5; // outline width for cute style
+const outline = (color) => { ctx.strokeStyle = color || "#2d1b0e"; ctx.lineWidth = OL; ctx.stroke(); };
+const drawCuteEyes = (cx, cy, open) => {
+  ctx.fillStyle = "#2d1b0e";
+  if (open) {
+    // round eyes with highlight
+    ctx.beginPath(); ctx.arc(cx - 6, cy, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 6, cy, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "#fff";
+    ctx.beginPath(); ctx.arc(cx - 5, cy - 1, 1.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + 7, cy - 1, 1.2, 0, Math.PI * 2); ctx.fill();
+  } else {
+    // happy closed eyes (arcs)
+    ctx.strokeStyle = "#2d1b0e"; ctx.lineWidth = 2; ctx.lineCap = "round";
+    ctx.beginPath(); ctx.arc(cx - 6, cy, 3, Math.PI, 0); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + 6, cy, 3, Math.PI, 0); ctx.stroke();
   }
-
-  const pepPositions = [[-18, -15], [15, -10], [0, 18], [-12, 12], [18, 12]];
-  pepPositions.forEach(([ox, oy]) => {
-    const pepR = Math.min(150 + progress * 60, 200);
-    const pepG = Math.min(30 + progress * 20, 60);
-    ctx.fillStyle = `rgb(${pepR}, ${pepG}, 20)`;
-    ctx.beginPath();
-    ctx.arc(cx + ox, cy + oy, 6, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (progress > 0.6) {
-      ctx.strokeStyle = `rgba(80, 20, 0, ${(progress - 0.6) * 2})`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-  });
-
-  if (progress > 0.2) {
-    const steamAlpha = (progress - 0.2) * 0.5;
-    for (let i = 0; i < 3; i++) {
-      const sx = cx - 15 + i * 15;
-      const sway = Math.sin(t * 2 + i * 1.5) * 5;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${steamAlpha * (0.5 + Math.sin(t + i) * 0.3)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx, cy - r - 2);
-      ctx.quadraticCurveTo(sx + sway, cy - r - 18, sx - sway * 0.5, cy - r - 32);
-      ctx.stroke();
-    }
+};
+const drawSmile = (cx, cy, w) => {
+  ctx.strokeStyle = "#2d1b0e"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(cx, cy - 2, w || 4, 0.15, Math.PI - 0.15); ctx.stroke();
+};
+const drawBlush = (cx, cy) => {
+  ctx.fillStyle = "rgba(255,130,130,0.35)";
+  ctx.beginPath(); ctx.ellipse(cx - 12, cy + 3, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx + 12, cy + 3, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+};
+const drawSteam = (cx, topY, count, t, alpha) => {
+  ctx.strokeStyle = `rgba(255,255,255,${alpha || 0.45})`; ctx.lineWidth = 2; ctx.lineCap = "round";
+  for (let i = 0; i < (count || 3); i++) {
+    const sx = cx - (count - 1) * 7 + i * 14;
+    const sw = Math.sin(t * 2 + i * 1.3) * 5;
+    ctx.beginPath(); ctx.moveTo(sx, topY);
+    ctx.quadraticCurveTo(sx + sw, topY - 14, sx - sw * 0.5, topY - 28);
+    ctx.stroke();
   }
-
-  ctx.fillStyle = "#8b7355";
-  ctx.beginPath();
-  ctx.roundRect(55, 145, 70, 12, 4);
-  ctx.fill();
-  ctx.fillStyle = "#a08060";
-  ctx.beginPath();
-  ctx.roundRect(60, 147, 60, 8, 3);
-  ctx.fill();
 };
 
-// --- Laundry illustration ---
-const drawLaundry = (progress, t) => {
+// --- Pizza illustration (cute floating slice) ---
+const drawPizza = (progress, t) => {
   const cx = 90, cy = 90;
+  const bob = Math.sin(t * 2) * 4;
+  const tilt = Math.sin(t * 1.5) * 0.06;
+  ctx.save(); ctx.translate(cx, cy + bob); ctx.rotate(tilt);
 
-  ctx.fillStyle = "#e8e8e8";
-  ctx.beginPath();
-  ctx.roundRect(20, 15, 140, 150, 14);
-  ctx.fill();
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.1)";
+  ctx.beginPath(); ctx.ellipse(0, 52 - bob, 38, 8, 0, 0, Math.PI * 2); ctx.fill();
 
-  ctx.fillStyle = "#d0d0d0";
-  ctx.fillRect(20, 15, 140, 30);
+  // Crust (triangle slice)
+  ctx.fillStyle = "#e8a84c";
+  ctx.beginPath(); ctx.moveTo(0, -48); ctx.lineTo(-40, 35); ctx.lineTo(40, 35);
+  ctx.closePath(); ctx.fill(); outline();
 
-  ctx.fillStyle = "#888";
-  ctx.beginPath();
-  ctx.arc(50, 30, 8, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "#999";
-  ctx.beginPath();
-  ctx.arc(50, 30, 5, 0, Math.PI * 2);
-  ctx.fill();
+  // Sauce
+  ctx.fillStyle = "#d94030";
+  ctx.beginPath(); ctx.moveTo(0, -36); ctx.lineTo(-30, 28); ctx.lineTo(30, 28);
+  ctx.closePath(); ctx.fill();
 
-  const lightColor = state.status === "running" ? "#4ade80" : "#666";
-  ctx.fillStyle = lightColor;
-  ctx.beginPath();
-  ctx.arc(130, 30, 4, 0, Math.PI * 2);
-  ctx.fill();
+  // Cheese (melty, gets more golden with progress)
+  const cg = Math.round(210 - progress * 40);
+  ctx.fillStyle = `rgb(255,${cg},60)`;
+  ctx.beginPath(); ctx.moveTo(0, -32); ctx.lineTo(-26, 24); ctx.lineTo(26, 24);
+  ctx.closePath(); ctx.fill();
 
-  ctx.fillStyle = "#1a3a5c";
-  ctx.beginPath();
-  ctx.arc(cx, cy + 15, 45, 0, Math.PI * 2);
-  ctx.fill();
+  // Cheese drips
+  ctx.fillStyle = `rgb(255,${cg},60)`;
+  ctx.beginPath(); ctx.moveTo(-26, 24); ctx.quadraticCurveTo(-30, 34 + Math.sin(t) * 3, -24, 28); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(26, 24); ctx.quadraticCurveTo(32, 36 + Math.sin(t + 1) * 3, 24, 28); ctx.fill();
 
-  const grad = ctx.createRadialGradient(cx - 10, cy + 5, 5, cx, cy + 15, 45);
-  grad.addColorStop(0, "rgba(100, 180, 255, 0.15)");
-  grad.addColorStop(1, "rgba(20, 50, 80, 0.3)");
-  ctx.fillStyle = grad;
-  ctx.beginPath();
-  ctx.arc(cx, cy + 15, 44, 0, Math.PI * 2);
-  ctx.fill();
+  // Crust edge
+  ctx.fillStyle = "#c87830";
+  ctx.beginPath(); ctx.moveTo(-40, 35); ctx.quadraticCurveTo(0, 46, 40, 35); ctx.lineTo(36, 30);
+  ctx.quadraticCurveTo(0, 40, -36, 30); ctx.closePath(); ctx.fill(); outline();
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(cx, cy + 15, 42, 0, Math.PI * 2);
-  ctx.clip();
-
-  const waterLevel = cy + 15 + 20 - progress * 10;
-  ctx.fillStyle = "rgba(100, 180, 255, 0.3)";
-  ctx.beginPath();
-  ctx.moveTo(cx - 45, waterLevel);
-  for (let x = cx - 45; x <= cx + 45; x++) {
-    const wave = Math.sin((x - cx) * 0.1 + t * 4) * 3;
-    ctx.lineTo(x, waterLevel + wave);
-  }
-  ctx.lineTo(cx + 45, cy + 65);
-  ctx.lineTo(cx - 45, cy + 65);
-  ctx.closePath();
-  ctx.fill();
-
-  const spinSpeed = state.status === "running" ? 3 + progress * 4 : 0;
-  const clothColors = ["#e74c3c", "#3498db", "#2ecc71", "#f39c12", "#9b59b6"];
-  clothColors.forEach((color, i) => {
-    const angle = (i / clothColors.length) * Math.PI * 2 + t * spinSpeed;
-    const dist = 22 + Math.sin(t * 2 + i) * 5;
-    const clothX = cx + Math.cos(angle) * dist;
-    const clothY = (cy + 15) + Math.sin(angle) * dist;
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    const size = 8 + Math.sin(t * 3 + i * 2) * 2;
-    ctx.ellipse(clothX, clothY, size, size * 0.7, angle, 0, Math.PI * 2);
-    ctx.fill();
+  // Pepperoni
+  const pepPos = [[-10, -8], [10, 2], [-2, 14], [14, -16], [-16, 6]];
+  pepPos.forEach(([px, py]) => {
+    ctx.fillStyle = "#b82020"; ctx.beginPath(); ctx.arc(px, py, 6, 0, Math.PI * 2); ctx.fill(); outline();
+    ctx.fillStyle = "#d03030"; ctx.beginPath(); ctx.arc(px - 1, py - 1, 3.5, 0, Math.PI * 2); ctx.fill();
   });
 
+  // Cute face
+  drawCuteEyes(0, 0, true);
+  drawSmile(0, 6);
+  drawBlush(0, 4);
+
+  // Steam when cooking
+  if (progress > 0.2) {
+    ctx.restore(); // restore before drawing steam in world coords
+    drawSteam(cx, cy + bob - 52, 3, t, Math.min((progress - 0.2) * 0.7, 0.5));
+    return;
+  }
+  ctx.restore();
+};
+
+// --- Laundry illustration (cute washer) ---
+const drawLaundry = (progress, t) => {
+  const cx = 90, cy = 88;
+
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.beginPath(); ctx.ellipse(cx, 168, 50, 6, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Body
+  ctx.fillStyle = "#e8eaee"; ctx.beginPath(); ctx.roundRect(30, 22, 120, 140, 14); ctx.fill(); outline();
+
+  // Top panel
+  ctx.fillStyle = "#d0d3d8"; ctx.beginPath(); ctx.roundRect(30, 22, 120, 32, [14, 14, 0, 0]); ctx.fill(); outline();
+
+  // Knob
+  ctx.fillStyle = "#888"; ctx.beginPath(); ctx.arc(55, 38, 8, 0, Math.PI * 2); ctx.fill(); outline();
+  ctx.fillStyle = "#bbb"; ctx.beginPath(); ctx.arc(55, 38, 4, 0, Math.PI * 2); ctx.fill();
+
+  // Status light
+  ctx.fillStyle = state.status === "running" ? "#4ade80" : "#aaa";
+  ctx.beginPath(); ctx.arc(125, 38, 4, 0, Math.PI * 2); ctx.fill(); outline();
+
+  // Door circle
+  ctx.fillStyle = "#3a6090"; ctx.beginPath(); ctx.arc(cx, cy + 18, 42, 0, Math.PI * 2); ctx.fill();
+  outline();
+
+  // Water & clothes inside
+  ctx.save(); ctx.beginPath(); ctx.arc(cx, cy + 18, 39, 0, Math.PI * 2); ctx.clip();
+  const wl = cy + 30 - progress * 8;
+  ctx.fillStyle = "rgba(100,190,255,0.35)"; ctx.beginPath(); ctx.moveTo(40, wl);
+  for (let x = 40; x <= 140; x += 2) ctx.lineTo(x, wl + Math.sin((x - cx) * 0.12 + t * 4) * 3);
+  ctx.lineTo(140, 170); ctx.lineTo(40, 170); ctx.closePath(); ctx.fill();
+
+  const sp = state.status === "running" ? 3 + progress * 4 : 0;
+  ["#e74c3c","#3498db","#2ecc71","#f39c12"].forEach((c, i) => {
+    const a = (i / 4) * Math.PI * 2 + t * sp;
+    const d = 20 + Math.sin(t * 2 + i) * 4;
+    ctx.fillStyle = c; ctx.beginPath();
+    ctx.ellipse(cx + Math.cos(a) * d, cy + 18 + Math.sin(a) * d, 8, 6, a, 0, Math.PI * 2);
+    ctx.fill(); outline();
+  });
   ctx.restore();
 
-  ctx.strokeStyle = "#bbb";
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(cx, cy + 15, 46, 0, Math.PI * 2);
-  ctx.stroke();
+  // Glass shine
+  ctx.strokeStyle = "rgba(255,255,255,0.3)"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(cx - 14, cy + 8, 22, -0.9, 0.2); ctx.stroke();
 
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx - 12, cy + 5, 20, -0.8, 0.3);
-  ctx.stroke();
+  // Cute face on the door
+  drawCuteEyes(cx, cy + 12, state.status === "running");
+  drawSmile(cx, cy + 18);
 
-  if (progress > 0.1 && progress < 0.9) {
-    for (let i = 0; i < 5; i++) {
-      const bx = cx - 20 + i * 10 + Math.sin(t + i) * 3;
-      const by = waterLevel - 5 + Math.cos(t * 1.5 + i) * 4;
-      const br = 3 + Math.sin(t * 2 + i) * 1;
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.3 + Math.sin(t + i) * 0.15})`;
+  // Suds
+  if (progress > 0.1) {
+    ctx.fillStyle = "rgba(255,255,255,0.5)";
+    for (let i = 0; i < 4; i++) {
       ctx.beginPath();
-      ctx.arc(bx, by, br, 0, Math.PI * 2);
+      ctx.arc(cx - 15 + i * 10 + Math.sin(t + i) * 2, wl - 4, 4 + Math.sin(t * 2 + i) * 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
   }
 };
 
-// --- Eggs illustration ---
+// --- Eggs illustration (cute egg in pot) ---
 const drawEggs = (progress, t) => {
-  const cx = 90, cy = 100;
+  const cx = 90, cy = 95;
 
-  ctx.fillStyle = "#777";
-  ctx.beginPath();
-  ctx.roundRect(30, 60, 120, 90, [0, 0, 12, 12]);
-  ctx.fill();
+  // Pot body
+  ctx.fillStyle = "#e85050"; ctx.beginPath(); ctx.roundRect(28, 65, 124, 80, [0, 0, 16, 16]); ctx.fill(); outline();
 
-  ctx.fillStyle = "#555";
-  ctx.beginPath();
-  ctx.ellipse(cx, 65, 58, 12, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Pot rim
+  ctx.fillStyle = "#cc3838"; ctx.beginPath(); ctx.roundRect(22, 58, 136, 16, 8); ctx.fill(); outline();
 
-  ctx.fillStyle = "rgba(120, 200, 255, 0.5)";
-  ctx.beginPath();
-  ctx.ellipse(cx, 68, 55, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = "rgba(120, 200, 255, 0.4)";
-  ctx.fillRect(35, 68, 110, 70);
+  // Water
+  ctx.fillStyle = "rgba(130,210,255,0.55)"; ctx.beginPath();
+  ctx.roundRect(32, 70, 116, 70, [0, 0, 14, 14]); ctx.fill();
 
-  const bubbleCount = Math.floor(2 + progress * 12);
-  for (let i = 0; i < bubbleCount; i++) {
-    const bx = 50 + (i * 37) % 80;
-    const by = 90 + Math.sin(t * 3 + i * 1.7) * 15 - (t * 20 + i * 30) % 50;
-    const br = 2 + Math.sin(t + i) * 1.5;
-    ctx.fillStyle = `rgba(255, 255, 255, ${0.2 + Math.sin(t * 2 + i) * 0.15})`;
-    ctx.beginPath();
-    ctx.arc(bx, Math.max(by, 70), br, 0, Math.PI * 2);
-    ctx.fill();
+  // Bubbles
+  const bc = Math.floor(3 + progress * 10);
+  for (let i = 0; i < bc; i++) {
+    const bx = 48 + (i * 29) % 80;
+    const by = 100 + Math.sin(t * 3 + i * 1.7) * 10 - (t * 25 + i * 30) % 45;
+    ctx.fillStyle = `rgba(255,255,255,${0.3 + Math.sin(t + i) * 0.2})`;
+    ctx.beginPath(); ctx.arc(bx, Math.max(by, 75), 3, 0, Math.PI * 2); ctx.fill();
   }
 
-  const eggPositions = [[-20, 5], [0, 8], [20, 3]];
-  eggPositions.forEach(([ox, oy]) => {
-    const eggR = 255 - Math.floor(progress * 20);
-    const eggG = 250 - Math.floor(progress * 25);
-    const eggB = 240 - Math.floor(progress * 30);
-    ctx.fillStyle = `rgb(${eggR}, ${eggG}, ${eggB})`;
-    ctx.beginPath();
-    ctx.ellipse(cx + ox, cy + oy + 15, 12, 15, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "rgba(0,0,0,0.1)";
-    ctx.lineWidth = 1;
-    ctx.stroke();
-  });
-
-  if (progress > 0.15) {
-    const steamAlpha = Math.min((progress - 0.15) * 0.6, 0.4);
-    for (let i = 0; i < 4; i++) {
-      const sx = cx - 25 + i * 18;
-      const sway = Math.sin(t * 2.5 + i * 1.2) * 6;
-      ctx.strokeStyle = `rgba(255, 255, 255, ${steamAlpha * (0.4 + Math.sin(t * 1.5 + i) * 0.3)})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.moveTo(sx, 58);
-      ctx.quadraticCurveTo(sx + sway, 38, sx - sway * 0.5, 18);
-      ctx.stroke();
-    }
+  // Cute egg
+  const bob = Math.sin(t * 2) * 3;
+  ctx.fillStyle = "#fff8ee"; ctx.beginPath(); ctx.ellipse(cx, 100 + bob, 18, 22, 0, 0, Math.PI * 2); ctx.fill(); outline();
+  drawCuteEyes(cx, 96 + bob, progress < 0.8);
+  if (progress >= 0.8) drawSmile(cx, 103 + bob); // happy when done
+  else { // little "o" mouth (surprised by hot water)
+    ctx.fillStyle = "#2d1b0e"; ctx.beginPath(); ctx.arc(cx, 104 + bob, 2.5, 0, Math.PI * 2); ctx.fill();
   }
+  drawBlush(cx, 100 + bob);
 
-  ctx.fillStyle = "#444";
-  ctx.beginPath();
-  ctx.roundRect(15, 85, 18, 10, 4);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.roundRect(147, 85, 18, 10, 4);
-  ctx.fill();
+  // Handles
+  ctx.fillStyle = "#555"; ctx.beginPath(); ctx.roundRect(12, 85, 18, 10, 5); ctx.fill(); outline();
+  ctx.beginPath(); ctx.roundRect(150, 85, 18, 10, 5); ctx.fill(); outline();
 
-  const stoveColor = progress > 0 ? `rgba(255, ${Math.round(100 - progress * 80)}, 0, ${0.4 + progress * 0.4})` : "rgba(100,100,100,0.3)";
-  ctx.strokeStyle = stoveColor;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(cx, 165, 20, 0, Math.PI * 2);
-  ctx.stroke();
+  // Steam
+  if (progress > 0.15) drawSteam(cx, 55, 4, t, Math.min((progress - 0.15) * 0.6, 0.45));
 };
 
-// --- Tea illustration ---
+// --- Tea illustration (cute mug) ---
 const drawTea = (progress, t) => {
-  const cx = 90, cy = 105;
+  const cx = 85, cy = 100;
+  const bob = Math.sin(t * 1.5) * 2;
 
-  ctx.fillStyle = "#e8e0d0";
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 40, 50, 10, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Saucer
+  ctx.fillStyle = "#e8e0d0"; ctx.beginPath(); ctx.ellipse(cx, cy + 42, 48, 10, 0, 0, Math.PI * 2); ctx.fill(); outline();
 
-  ctx.fillStyle = "#f5f0e8";
-  ctx.beginPath();
-  ctx.moveTo(cx - 35, cy - 20);
-  ctx.lineTo(cx - 30, cy + 35);
-  ctx.quadraticCurveTo(cx, cy + 42, cx + 30, cy + 35);
-  ctx.lineTo(cx + 35, cy - 20);
-  ctx.closePath();
-  ctx.fill();
+  // Mug body
+  ctx.fillStyle = "#f5f0e8"; ctx.beginPath();
+  ctx.moveTo(cx - 32, cy - 18); ctx.lineTo(cx - 28, cy + 35); ctx.quadraticCurveTo(cx, cy + 42, cx + 28, cy + 35);
+  ctx.lineTo(cx + 32, cy - 18); ctx.closePath(); ctx.fill(); outline();
 
-  ctx.strokeStyle = "#f5f0e8";
-  ctx.lineWidth = 5;
-  ctx.beginPath();
-  ctx.arc(cx + 42, cy + 8, 14, -Math.PI / 2, Math.PI / 2);
-  ctx.stroke();
+  // Handle
+  ctx.strokeStyle = "#e0d8c8"; ctx.lineWidth = 6;
+  ctx.beginPath(); ctx.arc(cx + 38, cy + 10, 14, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+  ctx.strokeStyle = "#2d1b0e"; ctx.lineWidth = OL;
+  ctx.beginPath(); ctx.arc(cx + 38, cy + 10, 14, -Math.PI / 2, Math.PI / 2); ctx.stroke();
 
-  const teaR = 200 - Math.floor(progress * 80);
-  const teaG = 160 - Math.floor(progress * 70);
-  const teaB = 80 - Math.floor(progress * 40);
-  ctx.fillStyle = `rgb(${teaR}, ${teaG}, ${Math.max(20, teaB)})`;
-  ctx.beginPath();
-  ctx.moveTo(cx - 33, cy - 15);
-  ctx.lineTo(cx - 30, cy + 33);
-  ctx.quadraticCurveTo(cx, cy + 40, cx + 30, cy + 33);
-  ctx.lineTo(cx + 33, cy - 15);
-  ctx.closePath();
-  ctx.fill();
+  // Tea liquid (darkens with steeping)
+  const tR = 210 - Math.floor(progress * 90), tG = 170 - Math.floor(progress * 80);
+  ctx.fillStyle = `rgb(${tR},${tG},${Math.max(30, 80 - progress * 40)})`;
+  ctx.beginPath(); ctx.moveTo(cx - 30, cy - 12); ctx.lineTo(cx - 28, cy + 33);
+  ctx.quadraticCurveTo(cx, cy + 40, cx + 28, cy + 33); ctx.lineTo(cx + 30, cy - 12); ctx.closePath(); ctx.fill();
 
-  ctx.strokeStyle = "#b8a080";
-  ctx.lineWidth = 1.5;
-  ctx.beginPath();
-  ctx.moveTo(cx - 5, cy - 20);
-  ctx.quadraticCurveTo(cx - 10, cy - 30, cx - 20, cy - 28);
-  ctx.stroke();
+  // Tea bag
+  ctx.strokeStyle = "#b8a080"; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(cx - 4, cy - 18); ctx.quadraticCurveTo(cx - 12, cy - 28, cx - 20, cy - 26); ctx.stroke();
+  ctx.fillStyle = "#d4c4a8"; ctx.fillRect(cx - 26, cy - 32, 12, 10); outline();
 
-  ctx.fillStyle = "#d4c4a8";
-  ctx.fillRect(cx - 26, cy - 33, 12, 10);
+  const bagY = cy + bob;
+  ctx.fillStyle = "#c4a878"; ctx.beginPath(); ctx.roundRect(cx - 10, bagY, 12, 18, 3); ctx.fill(); outline();
 
-  const bobY = Math.sin(t * 1.5) * 2;
-  ctx.fillStyle = "#b8a080";
-  ctx.beginPath();
-  ctx.roundRect(cx - 12, cy + bobY, 14, 20, 3);
-  ctx.fill();
+  // Cute face on mug
+  drawCuteEyes(cx, cy + 6, true);
+  drawSmile(cx, cy + 12);
+  drawBlush(cx, cy + 10);
 
-  if (progress > 0 && progress < 0.8) {
-    const diffAlpha = 0.15 + progress * 0.15;
-    const diffGrad = ctx.createRadialGradient(cx - 5, cy + bobY + 10, 2, cx - 5, cy + bobY + 10, 30 + progress * 20);
-    diffGrad.addColorStop(0, `rgba(${Math.round(150 - progress * 50)}, ${Math.round(100 - progress * 40)}, 30, ${diffAlpha})`);
-    diffGrad.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = diffGrad;
-    ctx.fillRect(cx - 33, cy - 15, 66, 50);
-  }
-
-  const steamAlpha = 0.2 + progress * 0.2;
-  for (let i = 0; i < 3; i++) {
-    const sx = cx - 12 + i * 12;
-    const sway = Math.sin(t * 2 + i * 1.3) * 5;
-    ctx.strokeStyle = `rgba(200, 200, 200, ${steamAlpha * (0.4 + Math.sin(t + i) * 0.3)})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(sx, cy - 22);
-    ctx.quadraticCurveTo(sx + sway, cy - 40, sx - sway * 0.5, cy - 55);
-    ctx.stroke();
-  }
+  // Steam
+  drawSteam(cx, cy - 22, 3, t, 0.3 + progress * 0.2);
 };
 
-// --- Workout illustration ---
+// --- Workout illustration (cute character) ---
 const drawWorkout = (progress, t) => {
-  const cx = 90, cy = 90;
-  const accent = getAccentColor();
+  const cx = 90, cy = 85;
+  const bounce = Math.sin(t * 4) * 4;
+  const armL = Math.sin(t * 3) * 22;
+  const armR = Math.sin(t * 3 + Math.PI) * 22;
 
-  ctx.fillStyle = "rgba(255,255,255,0.05)";
-  ctx.fillRect(10, 145, 160, 3);
+  // Floor
+  ctx.fillStyle = "rgba(255,255,255,0.06)"; ctx.fillRect(15, 150, 150, 3);
 
-  const bounce = Math.sin(t * 4) * 5;
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.beginPath(); ctx.ellipse(cx, 155, 28, 5, 0, 0, Math.PI * 2); ctx.fill();
 
-  ctx.strokeStyle = accent;
-  ctx.fillStyle = accent;
-  const headY = cy - 30 + bounce * 0.3;
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.arc(cx, headY, 12, 0, Math.PI * 2);
-  ctx.stroke();
+  // Body (rounded)
+  ctx.fillStyle = "#ff9466";
+  ctx.beginPath(); ctx.roundRect(cx - 16, cy + 10 + bounce * 0.3, 32, 36, 12); ctx.fill(); outline();
 
-  const bodyTop = headY + 12;
-  const bodyBottom = bodyTop + 40;
-  ctx.beginPath();
-  ctx.moveTo(cx, bodyTop);
-  ctx.lineTo(cx, bodyBottom);
-  ctx.stroke();
+  // Legs
+  ctx.fillStyle = "#ff9466"; ctx.lineWidth = OL; ctx.strokeStyle = "#2d1b0e";
+  ctx.beginPath(); ctx.roundRect(cx - 14, cy + 42 + bounce * 0.2, 10, 24, 5); ctx.fill(); outline();
+  ctx.beginPath(); ctx.roundRect(cx + 4, cy + 42 + bounce * 0.2, 10, 24, 5); ctx.fill(); outline();
 
-  ctx.beginPath();
-  ctx.moveTo(cx, bodyTop + 10);
-  ctx.lineTo(cx - 25, bodyTop + 10 + Math.sin(t * 3) * 20);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, bodyTop + 10);
-  ctx.lineTo(cx + 25, bodyTop + 10 + Math.sin(t * 3 + Math.PI) * 20);
-  ctx.stroke();
+  // Shoes
+  ctx.fillStyle = "#4488ff";
+  ctx.beginPath(); ctx.roundRect(cx - 16, cy + 62 + bounce * 0.2, 14, 8, 4); ctx.fill(); outline();
+  ctx.beginPath(); ctx.roundRect(cx + 2, cy + 62 + bounce * 0.2, 14, 8, 4); ctx.fill(); outline();
 
-  if (progress > 0) {
-    const ly = bodyTop + 10 + Math.sin(t * 3) * 20;
-    const ry = bodyTop + 10 + Math.sin(t * 3 + Math.PI) * 20;
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx - 25 - 8, ly);
-    ctx.lineTo(cx - 25 + 8, ly);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(cx + 25 - 8, ry);
-    ctx.lineTo(cx + 25 + 8, ry);
-    ctx.stroke();
-    ctx.lineWidth = 3;
+  // Arms
+  ctx.strokeStyle = "#ff9466"; ctx.lineWidth = 7; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.moveTo(cx - 16, cy + 18 + bounce * 0.3); ctx.lineTo(cx - 30, cy + 18 + armL); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + 16, cy + 18 + bounce * 0.3); ctx.lineTo(cx + 30, cy + 18 + armR); ctx.stroke();
+  ctx.strokeStyle = "#2d1b0e"; ctx.lineWidth = OL;
+  ctx.beginPath(); ctx.moveTo(cx - 16, cy + 18 + bounce * 0.3); ctx.lineTo(cx - 30, cy + 18 + armL); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + 16, cy + 18 + bounce * 0.3); ctx.lineTo(cx + 30, cy + 18 + armR); ctx.stroke();
+
+  // Dumbbells
+  ctx.fillStyle = "#555";
+  ctx.beginPath(); ctx.roundRect(cx - 38, cy + 14 + armL, 16, 6, 3); ctx.fill(); outline();
+  ctx.beginPath(); ctx.roundRect(cx + 22, cy + 14 + armR, 16, 6, 3); ctx.fill(); outline();
+
+  // Head
+  ctx.fillStyle = "#ff9466"; ctx.beginPath(); ctx.arc(cx, cy + bounce * 0.3, 18, 0, Math.PI * 2); ctx.fill(); outline();
+
+  // Headband
+  ctx.fillStyle = "#ff4466"; ctx.beginPath();
+  ctx.arc(cx, cy + bounce * 0.3, 18, -2.7, -0.45); ctx.lineTo(cx + 16, cy - 8 + bounce * 0.3);
+  ctx.arc(cx, cy + bounce * 0.3, 15, -0.45, -2.7, true); ctx.closePath(); ctx.fill();
+
+  // Face
+  drawCuteEyes(cx, cy - 2 + bounce * 0.3, true);
+  drawSmile(cx, cy + 5 + bounce * 0.3);
+  drawBlush(cx, cy + 2 + bounce * 0.3);
+
+  // Sweat drops
+  const sc = Math.floor(progress * 5);
+  for (let i = 0; i < sc; i++) {
+    const sx = cx + (i % 2 === 0 ? -1 : 1) * (22 + i * 3);
+    const sy = cy - 10 - ((t * 25 + i * 12) % 25) + bounce * 0.3;
+    const a = 1 - ((t * 25 + i * 12) % 25) / 25;
+    ctx.fillStyle = `rgba(100,190,255,${a * 0.7})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 2.5, 0, Math.PI * 2); ctx.fill();
   }
 
-  ctx.beginPath();
-  ctx.moveTo(cx, bodyBottom);
-  ctx.lineTo(cx - 15, 145);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx, bodyBottom);
-  ctx.lineTo(cx + 15, 145);
-  ctx.stroke();
-
-  const sweatCount = Math.floor(progress * 6);
-  for (let i = 0; i < sweatCount; i++) {
-    const sx = cx + (i % 2 === 0 ? -1 : 1) * (18 + i * 3);
-    const sy = headY - 5 - ((t * 30 + i * 15) % 30);
-    const alpha = 1 - ((t * 30 + i * 15) % 30) / 30;
-    ctx.fillStyle = `rgba(100, 180, 255, ${alpha * 0.6})`;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = "rgba(255,255,255,0.1)";
-  ctx.beginPath();
-  ctx.roundRect(30, 158, 120, 8, 4);
-  ctx.fill();
-  ctx.fillStyle = accent;
-  ctx.beginPath();
-  ctx.roundRect(30, 158, Math.max(0, 120 * progress), 8, 4);
-  ctx.fill();
+  // Progress bar
+  ctx.fillStyle = "rgba(255,255,255,0.1)"; ctx.beginPath(); ctx.roundRect(30, 162, 120, 8, 4); ctx.fill();
+  ctx.fillStyle = getAccentColor(); ctx.beginPath(); ctx.roundRect(30, 162, Math.max(0, 120 * progress), 8, 4); ctx.fill();
 };
 
-// --- Nap illustration ---
+// --- Nap illustration (cute sleeping face) ---
 const drawNap = (progress, t) => {
   const cx = 90, cy = 100;
   const accent = getAccentColor();
   const bg = getBgColor();
 
-  ctx.fillStyle = "#e8e0d0";
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 15, 55, 18, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Stars
+  const stars = [[30, 18], [55, 10], [130, 20], [45, 35], [115, 30], [150, 40]];
+  stars.forEach(([sx, sy], i) => {
+    const tw = 0.4 + Math.sin(t * 2 + i * 1.5) * 0.4;
+    ctx.fillStyle = `rgba(255,255,200,${tw})`;
+    ctx.beginPath(); ctx.arc(sx, sy, 2, 0, Math.PI * 2); ctx.fill();
+  });
 
-  const blanketGrad = ctx.createLinearGradient(cx - 50, cy + 5, cx + 50, cy + 50);
-  blanketGrad.addColorStop(0, "#6e8cc0");
-  blanketGrad.addColorStop(1, "#4a6fa5");
-  ctx.fillStyle = blanketGrad;
-  ctx.beginPath();
-  ctx.moveTo(cx - 50, cy + 5);
-  for (let x = cx - 50; x <= cx + 50; x += 2) {
-    ctx.lineTo(x, cy + 5 + Math.sin((x - cx) * 0.08) * 3);
-  }
-  ctx.lineTo(cx + 50, cy + 40);
-  ctx.quadraticCurveTo(cx, cy + 48, cx - 50, cy + 40);
-  ctx.closePath();
-  ctx.fill();
+  // Moon
+  ctx.fillStyle = "#ffd700"; ctx.beginPath(); ctx.arc(148, 22, 14, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = bg; ctx.beginPath(); ctx.arc(153, 18, 12, 0, Math.PI * 2); ctx.fill();
 
-  ctx.fillStyle = "#f5d0b0";
-  ctx.beginPath();
-  ctx.arc(cx, cy - 5, 20, 0, Math.PI * 2);
-  ctx.fill();
+  // Pillow
+  ctx.fillStyle = "#f0e8d8"; ctx.beginPath(); ctx.ellipse(cx, cy + 14, 52, 16, 0, 0, Math.PI * 2); ctx.fill(); outline("#c8b898");
 
-  ctx.strokeStyle = "#8b6b50";
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(cx - 7, cy - 7, 4, 0, Math.PI);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx + 7, cy - 7, 4, 0, Math.PI);
-  ctx.stroke();
+  // Blanket
+  const bGrad = ctx.createLinearGradient(40, cy + 5, 140, cy + 45);
+  bGrad.addColorStop(0, "#7ea0d0"); bGrad.addColorStop(1, "#5a80b5");
+  ctx.fillStyle = bGrad; ctx.beginPath(); ctx.moveTo(40, cy + 5);
+  for (let x = 40; x <= 140; x += 2) ctx.lineTo(x, cy + 5 + Math.sin((x - cx) * 0.08) * 3);
+  ctx.lineTo(140, cy + 40); ctx.quadraticCurveTo(cx, cy + 48, 40, cy + 40); ctx.closePath(); ctx.fill(); outline("#4a6a90");
 
-  ctx.beginPath();
-  ctx.arc(cx, cy, 6, 0.2, Math.PI - 0.2);
-  ctx.stroke();
+  // Head
+  ctx.fillStyle = "#f5d0b0"; ctx.beginPath(); ctx.arc(cx, cy - 5, 22, 0, Math.PI * 2); ctx.fill(); outline();
 
-  const breathe = Math.sin(t * 1.5) * 2;
-  ctx.fillStyle = "#6e8cc0";
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 20 + breathe, 30, 8 + breathe, 0, 0, Math.PI * 2);
-  ctx.fill();
+  // Closed eyes
+  ctx.strokeStyle = "#8b6b50"; ctx.lineWidth = 2; ctx.lineCap = "round";
+  ctx.beginPath(); ctx.arc(cx - 8, cy - 7, 4, 0, Math.PI); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx + 8, cy - 7, 4, 0, Math.PI); ctx.stroke();
 
-  ctx.font = "bold 16px system-ui";
-  ctx.fillStyle = accent;
+  // Smile
+  drawSmile(cx, cy + 2, 5);
+  drawBlush(cx, cy - 2);
+
+  // Breathing blanket
+  const br = Math.sin(t * 1.5) * 2;
+  ctx.fillStyle = "#7ea0d0"; ctx.beginPath();
+  ctx.ellipse(cx, cy + 20 + br, 30, 8 + br, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Z's
+  ctx.font = "bold 16px system-ui"; ctx.fillStyle = accent;
   for (let i = 0; i < 3; i++) {
-    const zx = cx + 30 + i * 8 + Math.sin(t + i) * 3;
-    const zy = cy - 20 - i * 18 - ((t * 15) % 20);
-    const alpha = 0.7 - i * 0.2;
-    ctx.globalAlpha = alpha;
-    ctx.fillText("z", zx, zy);
+    const zx = cx + 28 + i * 10 + Math.sin(t + i) * 3;
+    const zy = cy - 18 - i * 16 - ((t * 15) % 20);
+    ctx.globalAlpha = 0.7 - i * 0.2; ctx.fillText("z", zx, zy);
   }
   ctx.globalAlpha = 1;
+};
 
-  ctx.fillStyle = "#ffd700";
-  ctx.beginPath();
-  ctx.arc(140, 25, 12, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = bg;
-  ctx.beginPath();
-  ctx.arc(145, 22, 10, 0, Math.PI * 2);
-  ctx.fill();
+// --- Quiche illustration (cute quiche in pie dish) ---
+const drawQuiche = (progress, t) => {
+  const cx = 90, cy = 100;
+  const bob = Math.sin(t * 1.8) * 2;
 
-  const stars = [[30, 20], [60, 12], [120, 35], [45, 40], [100, 15]];
-  stars.forEach(([sx, sy], i) => {
-    const twinkle = 0.4 + Math.sin(t * 2 + i * 1.5) * 0.4;
-    ctx.fillStyle = `rgba(255, 255, 200, ${twinkle})`;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 1.5, 0, Math.PI * 2);
-    ctx.fill();
+  // Shadow
+  ctx.fillStyle = "rgba(0,0,0,0.08)";
+  ctx.beginPath(); ctx.ellipse(cx, cy + 50, 50, 8, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Pie dish (scalloped edges)
+  ctx.fillStyle = "#e8ddd0"; ctx.beginPath();
+  ctx.ellipse(cx, cy + 20 + bob, 58, 20, 0, 0, Math.PI * 2); ctx.fill(); outline("#b8a888");
+
+  // Dish body
+  ctx.fillStyle = "#f0e8d8"; ctx.beginPath();
+  ctx.moveTo(cx - 55, cy + 20 + bob); ctx.quadraticCurveTo(cx - 50, cy + 45 + bob, cx, cy + 48 + bob);
+  ctx.quadraticCurveTo(cx + 50, cy + 45 + bob, cx + 55, cy + 20 + bob); ctx.closePath();
+  ctx.fill(); outline("#b8a888");
+
+  // Scalloped crust edge
+  for (let i = 0; i < 16; i++) {
+    const angle = (i / 16) * Math.PI * 2;
+    const sx = cx + Math.cos(angle) * 54;
+    const sy = cy + 20 + bob + Math.sin(angle) * 18;
+    ctx.fillStyle = "#dab870"; ctx.beginPath(); ctx.arc(sx, sy, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.fillStyle = "#dab870"; ctx.beginPath();
+  ctx.ellipse(cx, cy + 20 + bob, 52, 16, 0, 0, Math.PI * 2); ctx.fill(); outline("#a08040");
+
+  // Quiche filling (golden yellow, darkens as it cooks)
+  const fR = 255 - Math.floor(progress * 30);
+  const fG = Math.max(140, 210 - Math.floor(progress * 50));
+  ctx.fillStyle = `rgb(${fR},${fG},60)`; ctx.beginPath();
+  ctx.ellipse(cx, cy + 20 + bob, 46, 12, 0, 0, Math.PI * 2); ctx.fill();
+
+  // Filling texture - little veggie bits
+  const bits = [[- 15, -2, "#5a8040"], [10, 1, "#c85040"], [-5, -4, "#5a8040"], [20, -1, "#e8a040"],
+    [-22, 0, "#c85040"], [8, -3, "#5a8040"], [25, 2, "#e8a040"], [-10, 3, "#c85040"]];
+  bits.forEach(([ox, oy, c]) => {
+    ctx.fillStyle = c; ctx.beginPath();
+    ctx.arc(cx + ox, cy + 19 + bob + oy, 3, 0, Math.PI * 2); ctx.fill();
   });
+
+  // Golden brown spots (more as it cooks)
+  const spotCount = Math.floor(progress * 6);
+  for (let i = 0; i < spotCount; i++) {
+    const sx = cx - 30 + (i * 47) % 60;
+    const sy = cy + 17 + bob + (i * 7) % 8 - 4;
+    ctx.fillStyle = `rgba(180,120,30,${0.2 + progress * 0.3})`;
+    ctx.beginPath(); ctx.ellipse(sx, sy, 6, 3, (i * 0.5), 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Cute face
+  drawCuteEyes(cx, cy + 16 + bob, progress < 0.9);
+  if (progress >= 0.9) {
+    // proud smile when almost done
+    drawSmile(cx, cy + 22 + bob, 6);
+  } else {
+    drawSmile(cx, cy + 22 + bob);
+  }
+  drawBlush(cx, cy + 19 + bob);
+
+  // Steam when cooking
+  if (progress > 0.15) drawSteam(cx, cy + bob - 2, 3, t, Math.min((progress - 0.15) * 0.6, 0.4));
+};
+
+// ─── Fun Facts ───────────────────────────────────────────
+const funFacts = {
+  pizza: [
+    "Frozen pizza tip: Let it rest 2-3 min after the oven so the cheese sets!",
+    "The first frozen pizza was sold by Totino's in 1962.",
+    "For crispier crust, put frozen pizza directly on the oven rack.",
+    "Americans eat about 3 billion frozen pizzas per year!",
+    "Adding fresh basil after baking makes frozen pizza taste homemade.",
+  ],
+  laundry: [
+    "Cold water cleans just as well and saves energy!",
+    "Tennis balls in the dryer help fluff towels faster.",
+    "Zip up zippers before washing to prevent snagging.",
+    "Turning clothes inside out keeps colors brighter longer.",
+    "Overloading the machine actually makes clothes less clean.",
+  ],
+  eggs: [
+    "For easy-peel hard-boiled eggs, use older eggs (7-10 days).",
+    "Add a splash of vinegar to water to prevent whites from spreading.",
+    "6 min = soft, 9 min = medium, 12 min = hard-boiled!",
+    "Ice bath immediately after boiling = perfectly peelable eggs.",
+    "A fresh egg sinks in water; a bad egg floats.",
+  ],
+  tea: [
+    "Black tea: 3-5 min. Green tea: 2-3 min. Over-steeping = bitter!",
+    "Tea is the world's most consumed beverage after water.",
+    "Adding milk first was once a sign of fine china (it wouldn't crack).",
+    "Herbal teas aren't technically tea -- they're tisanes!",
+    "Loose leaf tea can be re-steeped 2-3 times.",
+  ],
+  workout: [
+    "Even a 10-minute workout boosts your mood for hours.",
+    "Music at 120-140 BPM is ideal for high-intensity exercise.",
+    "You burn more calories in the hours AFTER exercise (afterburn effect).",
+    "Stretching after a workout reduces soreness by up to 25%.",
+    "Walking 10,000 steps burns roughly 400-500 calories.",
+  ],
+  nap: [
+    "A 20-minute nap is ideal -- longer can cause grogginess.",
+    "NASA found a 26-min nap improved pilot performance by 34%!",
+    "The best nap time is between 1-3 PM (natural dip in alertness).",
+    "Coffee before a 20-min nap = 'coffee nap' -- try it!",
+    "Even closing your eyes without sleeping reduces stress hormones.",
+  ],
+  quiche: [
+    "Real quiche Lorraine has no cheese -- just cream, eggs, and bacon!",
+    "Let quiche rest 10-15 min after baking for clean slices.",
+    "Blind-baking the crust first prevents a soggy bottom.",
+    "Quiche originated in the Lorraine region of France in the 1500s.",
+    "You can freeze quiche for up to 3 months -- it reheats beautifully.",
+  ],
+};
+let currentFunFact = "";
+let funFactInterval = null;
+
+const showFunFact = () => {
+  const detected = detectActivity(state.activity);
+  const pool = funFacts[detected];
+  if (!pool || !funFactEl) return;
+  let fact;
+  do { fact = pool[Math.floor(Math.random() * pool.length)]; } while (fact === currentFunFact && pool.length > 1);
+  currentFunFact = fact;
+  funFactEl.textContent = fact;
+  funFactEl.style.display = "";
+};
+
+const hideFunFact = () => {
+  if (funFactEl) funFactEl.style.display = "none";
+  if (funFactInterval) { clearInterval(funFactInterval); funFactInterval = null; }
+};
+
+// ─── Completion Stats ────────────────────────────────────
+const STATS_KEY = "kitchen-timer-stats";
+
+const loadStats = () => {
+  try { return JSON.parse(localStorage.getItem(STATS_KEY)) || { total: 0, byActivity: {} }; }
+  catch { return { total: 0, byActivity: {} }; }
+};
+
+const recordCompletion = () => {
+  const stats = loadStats();
+  stats.total++;
+  const act = detectActivity(state.activity) || "other";
+  stats.byActivity[act] = (stats.byActivity[act] || 0) + 1;
+  localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  updateStatsBar();
+};
+
+const updateStatsBar = () => {
+  if (!statsBarEl) return;
+  const stats = loadStats();
+  if (stats.total === 0) { statsBarEl.style.display = "none"; return; }
+  statsBarEl.style.display = "";
+  const parts = [];
+  parts.push(`${stats.total} timer${stats.total === 1 ? "" : "s"} completed`);
+  const top = Object.entries(stats.byActivity).sort((a, b) => b[1] - a[1])[0];
+  if (top && top[1] > 1) parts.push(`${top[1]}x ${top[0]}`);
+  statsBarEl.textContent = parts.join(" \u00b7 ");
 };
 
 // ─── Initialize ──────────────────────────────────────────
@@ -1747,6 +1811,7 @@ if (state.mode === "countdown") {
 }
 
 updateButtons();
+updateStatsBar();
 
 tickInterval = setInterval(handleTick, 250);
 handleTick();
