@@ -531,6 +531,17 @@
     </section>
   </main>
 
-  <script src="app.js" defer></script>
+  <script src="app.js?v=2" defer></script>
+  <script>
+    // If app.js fails to load, show an error
+    setTimeout(function() {
+      if (!window._timerInitialized) {
+        var msg = document.createElement("div");
+        msg.style.cssText = "position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#ff4444;color:#fff;padding:12px 20px;border-radius:10px;font-size:14px;z-index:99999;text-align:center;max-width:90%";
+        msg.textContent = "Timer script failed to load. Make sure index.html and app.js are in the same folder (extract the ZIP first).";
+        document.body.appendChild(msg);
+      }
+    }, 1500);
+  </script>
 </body>
 </html>

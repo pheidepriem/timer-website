@@ -1289,3 +1289,5 @@ tickInterval = setInterval(handleTick, 250);
 handleTick();
 
 window.addEventListener("beforeunload", saveState);
+
+window._timerInitialized = true;
